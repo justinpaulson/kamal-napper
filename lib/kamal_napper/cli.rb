@@ -242,53 +242,52 @@ module KamalNapper
     def start_daemon
       info "Starting Kamal Napper as daemon"
 
-      # Start health server BEFORE forking daemon process
-      health_server_thread = start_health_server_foreground
+      # No forking, start directly in the container for Kamal compatibility
+      # Keep things simple with just one process
+      
+      # Setup logging right away
+      setup_daemon_logging
+
+      # Write PID file with current process ID
+      write_pidfile(Process.pid)
+
+      # Start health server in this process
+      health_server_thread = Thread.new do
+        start_health_server_internal
+      end
+      
+      # Give health server a chance to start
       info "Waiting for health server to initialize"
-      sleep 3 # Give health server time to bind to port
+      sleep 3
 
-      # Fork and detach
-      pid = fork do
-        Process.daemon(true, false)
-
-        # Redirect stdout/stderr to log files if configured
-        setup_daemon_logging
-
-        # Write PID file
-        write_pidfile(Process.pid)
-
-        # Wait for health server to be completely ready
-        health_server_ready = false
-        retry_count = 0
-        loop do
-          begin
-            uri = URI("http://localhost:3000/health")
-            response = Net::HTTP.get_response(uri)
-            if response.code.to_i == 200
-              info "Health server is ready and serving requests"
-              health_server_ready = true
-              break
-            end
-          rescue StandardError => e
-            error "Error connecting to health server: #{e.class}: #{e.message}" if retry_count % 5 == 0
+      # Wait for health server to be completely ready
+      health_server_ready = false
+      retry_count = 0
+      5.times do
+        begin
+          uri = URI("http://localhost:3000/health")
+          response = Net::HTTP.get_response(uri)
+          if response.code.to_i == 200
+            info "Health server is ready and serving requests"
+            health_server_ready = true
+            break
           end
-
-          retry_count += 1
-          break if retry_count >= 20 # 20 seconds max wait time
-          sleep 1
+        rescue StandardError => e
+          error "Error connecting to health server: #{e.class}: #{e.message}"
         end
 
-        unless health_server_ready
-          error "Health server failed to start in time, continuing anyway"
-        end
-
-        # Start supervisor
-        supervisor = create_supervisor
-        supervisor.start
+        retry_count += 1
+        sleep 1
       end
 
-      Process.detach(pid)
-      info "Daemon started with PID: #{pid}"
+      unless health_server_ready
+        error "Health server failed to start in time, but continuing anyway"
+      end
+
+      # Start supervisor (blocking call)
+      info "Starting supervisor in main process"
+      supervisor = create_supervisor
+      supervisor.start
     end
 
     def setup_daemon_logging
