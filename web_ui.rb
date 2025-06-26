@@ -58,7 +58,7 @@ def get_supervisor
   KamalNapper::Supervisor.new(logger: @logger, config: @config)
 end
 
-# Get combined app state (actual state + tracked state)
+# Get combined app state (actual state + tracked state + last activity)
 def get_app_state(hostname, app_info)
   service_name = hostname.split('.').first
   tracked_state = app_info[:current_state]
@@ -68,22 +68,40 @@ def get_app_state(hostname, app_info)
   container_running = !result.empty?
   container_status = result.empty? ? 'Not running' : result
   
+  # Get last activity from request detector
+  request_detector = KamalNapper::RequestDetector.new(logger: @logger, config: @config)
+  last_activity = request_detector.last_request_time(hostname)
+  activity_info = if last_activity
+    time_ago = Time.now - last_activity
+    if time_ago < 60
+      "#{time_ago.round}s ago"
+    elsif time_ago < 3600
+      "#{(time_ago / 60).round}m ago"
+    elsif time_ago < 86400
+      "#{(time_ago / 3600).round}h ago"
+    else
+      "#{(time_ago / 86400).round}d ago"
+    end
+  else
+    "No activity detected"
+  end
+  
   # Determine the real state based on container state and tracked state
   if container_running
     if tracked_state == :starting
-      { state: 'Starting', css_class: 'state-starting', description: 'Container is starting up', status: container_status }
+      { state: 'Starting', css_class: 'state-starting', description: "Container is starting up", status: container_status, activity: activity_info }
     elsif tracked_state == :stopping
-      { state: 'Stopping', css_class: 'state-stopping', description: 'Container is shutting down', status: container_status }
+      { state: 'Stopping', css_class: 'state-stopping', description: "Container is shutting down", status: container_status, activity: activity_info }
     elsif tracked_state == :idle
-      { state: 'Idle', css_class: 'state-idle', description: 'Running but idle', status: container_status }
+      { state: 'Idle', css_class: 'state-idle', description: "Running but idle", status: container_status, activity: "Last active #{activity_info}" }
     else
-      { state: 'Running', css_class: 'state-running', description: 'Container is active', status: container_status }
+      { state: 'Running', css_class: 'state-running', description: "Container is active", status: container_status, activity: "Last active #{activity_info}" }
     end
   else
-    { state: 'Stopped', css_class: 'state-stopped', description: 'Container is not running', status: container_status }
+    { state: 'Stopped', css_class: 'state-stopped', description: "Container is not running", status: container_status, activity: "Last active #{activity_info}" }
   end
 rescue StandardError => e
-  { state: 'Unknown', css_class: 'state-unknown', description: "Error: #{e.message}", status: 'Error getting status' }
+  { state: 'Unknown', css_class: 'state-unknown', description: "Error: #{e.message}", status: 'Error getting status', activity: 'Unknown' }
 end
 
 # Format duration nicely
@@ -150,7 +168,7 @@ server.mount_proc("/") do |req, res|
               "<tr>" +
               "<td>#{display_name}</td>" +
               "<td><span class=\"#{app_state[:css_class]}\">#{app_state[:state]}</span></td>" +
-              "<td>#{app_state[:description]}</td>" +
+              "<td>#{app_state[:description]}<br><small style=\"color: #666;\">#{app_state[:activity]}</small></td>" +
               "<td><small>#{app_state[:status]}</small></td>" +
               "</tr>"
             end.join if status_info[:app_count] > 0}
