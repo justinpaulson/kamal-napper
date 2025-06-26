@@ -29,6 +29,7 @@ FROM ruby:3.3-slim as production
 # Install runtime dependencies
 RUN apt-get update && apt-get install -y \
     curl \
+    procps \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
