@@ -2,6 +2,7 @@
 
 require 'time'
 require 'set'
+require 'json'
 
 module KamalNapper
   # Log parsing and request detection with fallback mechanisms
@@ -91,10 +92,50 @@ module KamalNapper
 
     private
 
-    def parse_access_logs(hostname)
-      return nil unless File.exist?(LOG_PATH)
-
+    def parse_kamal_proxy_logs(hostname)
       latest_time = nil
+      
+      begin
+        # Get logs from kamal-proxy container (last 1000 lines to avoid too much data)
+        result = `docker logs kamal-proxy --tail 1000 2>/dev/null`
+        return nil if result.empty?
+        
+        result.lines.each do |line|
+          line.strip!
+          next if line.empty?
+          
+          begin
+            # Parse JSON log entry
+            log_entry = JSON.parse(line)
+            next unless log_entry['msg'] == 'Request'
+            next unless log_entry['host'] == hostname
+            
+            # Parse timestamp
+            timestamp = Time.parse(log_entry['time'])
+            
+            if latest_time.nil? || timestamp > latest_time
+              latest_time = timestamp
+            end
+          rescue JSON::ParserError, ArgumentError
+            # Skip non-JSON lines or invalid timestamps
+            next
+          end
+        end
+      rescue StandardError => e
+        @logger.warn("Error parsing kamal-proxy logs: #{e.message}")
+        return nil
+      end
+      
+      latest_time
+    end
+
+    def parse_access_logs(hostname)
+      # Parse kamal-proxy container logs for JSON entries
+      latest_time = parse_kamal_proxy_logs(hostname)
+      return latest_time if latest_time
+
+      # Fallback to file-based parsing if available
+      return nil unless File.exist?(LOG_PATH)
 
       begin
         Dir.glob(File.join(LOG_PATH, '*')).each do |log_file|
@@ -187,6 +228,31 @@ module KamalNapper
 
     def parse_hostnames_from_logs
       hostnames = Set.new
+      
+      # First try to get hostnames from kamal-proxy container logs
+      begin
+        result = `docker logs kamal-proxy --tail 1000 2>/dev/null`
+        unless result.empty?
+          result.lines.each do |line|
+            line.strip!
+            next if line.empty?
+            
+            begin
+              log_entry = JSON.parse(line)
+              next unless log_entry['msg'] == 'Request'
+              hostname = log_entry['host']
+              hostnames << hostname if hostname
+            rescue JSON::ParserError
+              # Skip non-JSON lines
+              next
+            end
+          end
+        end
+      rescue StandardError => e
+        @logger.warn("Error parsing hostnames from kamal-proxy logs: #{e.message}")
+      end
+      
+      # Fallback to file-based parsing
       return hostnames unless File.exist?(LOG_PATH)
 
       begin
