@@ -8,6 +8,9 @@ RUN apk add --no-cache \
     curl \
     wget
 
+# Install Docker CLI for container discovery
+RUN apk add --no-cache docker-cli
+
 # Set working directory
 WORKDIR /app
 
