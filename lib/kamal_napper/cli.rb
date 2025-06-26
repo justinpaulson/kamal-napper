@@ -473,36 +473,35 @@ module KamalNapper
           return
         end
 
-          info "Health server configured on port #{port}"
+        info "Health server configured on port #{port}"
 
-          server.mount_proc '/health' do |req, res|
-            res.status = 200
-            res['Content-Type'] = 'application/json'
-            res.body = JSON.generate({
-              status: 'ok',
-              service: 'kamal-napper',
-              version: KamalNapper::VERSION,
-              timestamp: Time.now.iso8601,
-              port: port
-            })
-          end
-
-          server.mount_proc '/' do |req, res|
-            res.status = 200
-            res['Content-Type'] = 'text/plain'
-            res.body = "Kamal Napper is running on port #{port}"
-          end
-
-          info "Health server starting on port #{port}..."
-          server.start
-          info "Health server started successfully on port #{port}"
-        rescue StandardError => e
-          error "Health server failed to start: #{e.message}"
-          error "Backtrace: #{e.backtrace.join("\n")}"
-          # Don't let health server failure kill the daemon
-          sleep 5
-          retry if @health_server_retries.nil? || (@health_server_retries += 1) < 3
+        server.mount_proc '/health' do |req, res|
+          res.status = 200
+          res['Content-Type'] = 'application/json'
+          res.body = JSON.generate({
+            status: 'ok',
+            service: 'kamal-napper',
+            version: KamalNapper::VERSION,
+            timestamp: Time.now.iso8601,
+            port: port
+          })
         end
+
+        server.mount_proc '/' do |req, res|
+          res.status = 200
+          res['Content-Type'] = 'text/plain'
+          res.body = "Kamal Napper is running on port #{port}"
+        end
+
+        info "Health server starting on port #{port}..."
+        server.start
+        info "Health server started successfully on port #{port}"
+      rescue StandardError => e
+        error "Health server failed to start: #{e.message}"
+        error "Backtrace: #{e.backtrace.join("\n")}"
+        # Don't let health server failure kill the daemon
+        sleep 5
+        retry if @health_server_retries.nil? || (@health_server_retries += 1) < 3
       end
     end
   end
