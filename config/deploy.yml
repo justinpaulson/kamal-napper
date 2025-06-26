@@ -43,11 +43,6 @@ volumes:
   - "/var/lib/kamal-napper:/var/lib/kamal-napper"
   - "/var/run/docker.sock:/var/run/docker.sock"
 
-# Configure health check
-healthcheck:
-  port: 80
-  path: /health
-
 # Labels and metadata
 labels:
   app.name: "kamal-napper"
