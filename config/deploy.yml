@@ -25,7 +25,8 @@ registry:
 env:
   clear:
     RACK_ENV: production
-    KAMAL_NAPPER_LOG_LEVEL: info
+    KAMAL_NAPPER_LOG_LEVEL: debug
+    KAMAL_HEALTH_SERVER_DEBUG: 'true'
   secret:
     - KAMAL_NAPPER_SECRET_KEY
 

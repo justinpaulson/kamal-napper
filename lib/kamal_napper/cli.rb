@@ -242,6 +242,11 @@ module KamalNapper
     def start_daemon
       info "Starting Kamal Napper as daemon"
 
+      # Start health server BEFORE forking daemon process
+      health_server_thread = start_health_server_foreground
+      info "Waiting for health server to initialize"
+      sleep 3 # Give health server time to bind to port
+
       # Fork and detach
       pid = fork do
         Process.daemon(true, false)
@@ -252,22 +257,24 @@ module KamalNapper
         # Write PID file
         write_pidfile(Process.pid)
 
-        # Start health server and wait for it to be ready before starting supervisor
+        # Wait for health server to be completely ready
         health_server_ready = false
-        health_server_thread = start_health_server
-        
-        # Wait for health server to be ready (up to 5 seconds)
-        5.times do
+        retry_count = 0
+        loop do
           begin
             uri = URI("http://localhost:3000/health")
             response = Net::HTTP.get_response(uri)
             if response.code.to_i == 200
+              info "Health server is ready and serving requests"
               health_server_ready = true
               break
             end
-          rescue StandardError
-            # Ignore errors during startup
+          rescue StandardError => e
+            error "Error connecting to health server: #{e.class}: #{e.message}" if retry_count % 5 == 0
           end
+
+          retry_count += 1
+          break if retry_count >= 20 # 20 seconds max wait time
           sleep 1
         end
 
@@ -423,26 +430,48 @@ module KamalNapper
       @logger.error(message)
     end
 
+    # Start health server in a background thread
     def start_health_server
       Thread.new do
-        begin
-          # Always use port 3000 for health checks to match Dockerfile HEALTHCHECK
-          port = 3000
-          server = nil
+        start_health_server_internal
+      end
+    end
 
-          begin
-            info "Starting health server on port #{port}"
-            server = WEBrick::HTTPServer.new(
-              Port: port,
-              Logger: WEBrick::Log.new($stderr, WEBrick::Log::ERROR),
-              AccessLog: [],
-              BindAddress: '0.0.0.0',
-              StartCallback: Proc.new { info "Health server ready on port #{port}" }
-            )
-          rescue Errno::EACCES, Errno::EADDRINUSE => e
-            error "Cannot bind to port #{port}: #{e.message}"
-            return
-          end
+    # Start health server synchronously in the foreground
+    def start_health_server_foreground
+      Thread.new do
+        start_health_server_internal
+      end
+    end
+
+    # Internal method to start the health server
+    def start_health_server_internal
+      begin
+        # Always use port 3000 for health checks to match Dockerfile HEALTHCHECK
+        port = 3000
+        server = nil
+        debug_mode = ENV['KAMAL_HEALTH_SERVER_DEBUG'] == 'true'
+
+        # Log more detailed debugging information
+        info "Health server debug mode: #{debug_mode}"
+        info "Current working directory: #{Dir.pwd}"
+        info "Process user: #{`whoami`.strip}"
+        info "Environment: #{ENV.to_h.select { |k,v| k.start_with?('KAMAL') }.inspect}"
+
+        begin
+          info "Starting health server on port #{port}"
+          logger_level = debug_mode ? WEBrick::Log::DEBUG : WEBrick::Log::ERROR
+          server = WEBrick::HTTPServer.new(
+            Port: port,
+            Logger: WEBrick::Log.new($stderr, logger_level),
+            AccessLog: debug_mode ? nil : [],
+            BindAddress: '0.0.0.0',
+            StartCallback: Proc.new { info "Health server ready on port #{port}" }
+          )
+        rescue Errno::EACCES, Errno::EADDRINUSE => e
+          error "Cannot bind to port #{port}: #{e.message}"
+          return
+        end
 
           info "Health server configured on port #{port}"
 

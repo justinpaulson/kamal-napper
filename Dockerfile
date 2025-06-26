@@ -61,8 +61,8 @@ ENV BUNDLE_PATH=/usr/local/bundle
 # Expose port (if needed for health checks)
 EXPOSE 3000
 
-# Health check for Kamal deployment
-HEALTHCHECK --interval=5s --timeout=3s --start-period=5s --retries=3 \
+# Health check for Kamal deployment with extended timeouts
+HEALTHCHECK --interval=10s --timeout=5s --start-period=20s --retries=5 \
   CMD curl -f http://localhost:3000/health || exit 1
 
 # Default command
