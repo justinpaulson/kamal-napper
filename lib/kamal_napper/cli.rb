@@ -3,6 +3,8 @@
 require 'thor'
 require 'json'
 require 'fileutils'
+require 'webrick'
+require 'thread'
 
 module KamalNapper
   # Command-line interface using Thor with proper error handling
@@ -250,6 +252,9 @@ module KamalNapper
         # Write PID file
         write_pidfile(Process.pid)
 
+        # Start health server in background thread
+        start_health_server
+
         # Start supervisor
         supervisor = create_supervisor
         supervisor.start
@@ -396,6 +401,39 @@ module KamalNapper
 
     def error(message)
       @logger.error(message)
+    end
+
+    def start_health_server
+      Thread.new do
+        begin
+          server = WEBrick::HTTPServer.new(
+            Port: 3000,
+            Logger: WEBrick::Log.new('/dev/null'),
+            AccessLog: []
+          )
+
+          server.mount_proc '/health' do |req, res|
+            res.status = 200
+            res['Content-Type'] = 'application/json'
+            res.body = JSON.generate({
+              status: 'ok',
+              service: 'kamal-napper',
+              version: KamalNapper::VERSION,
+              timestamp: Time.now.iso8601
+            })
+          end
+
+          server.mount_proc '/' do |req, res|
+            res.status = 200
+            res['Content-Type'] = 'text/plain'
+            res.body = 'Kamal Napper is running'
+          end
+
+          server.start
+        rescue StandardError => e
+          warn "Health server failed to start: #{e.message}"
+        end
+      end
     end
   end
 end
