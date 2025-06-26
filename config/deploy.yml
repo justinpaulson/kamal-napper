@@ -43,6 +43,9 @@ volumes:
   - "/var/lib/kamal-napper:/var/lib/kamal-napper"
   - "/var/run/docker.sock:/var/run/docker.sock"
 
+# Port configuration for health endpoint
+port: 3000
+
 # Labels and metadata
 labels:
   app.name: "kamal-napper"
