@@ -406,11 +406,27 @@ module KamalNapper
     def start_health_server
       Thread.new do
         begin
-          server = WEBrick::HTTPServer.new(
-            Port: 80,
-            Logger: WEBrick::Log.new('/dev/null'),
-            AccessLog: []
-          )
+          # Try port 80 first, fallback to 3000 if permission denied
+          port = 80
+          begin
+            server = WEBrick::HTTPServer.new(
+              Port: port,
+              Logger: WEBrick::Log.new('/dev/null'),
+              AccessLog: [],
+              BindAddress: '0.0.0.0'
+            )
+          rescue Errno::EACCES, Errno::EADDRINUSE => e
+            warn "Cannot bind to port #{port}: #{e.message}, trying port 3000"
+            port = 3000
+            server = WEBrick::HTTPServer.new(
+              Port: port,
+              Logger: WEBrick::Log.new('/dev/null'),
+              AccessLog: [],
+              BindAddress: '0.0.0.0'
+            )
+          end
+
+          info "Health server starting on port #{port}"
 
           server.mount_proc '/health' do |req, res|
             res.status = 200
@@ -419,19 +435,26 @@ module KamalNapper
               status: 'ok',
               service: 'kamal-napper',
               version: KamalNapper::VERSION,
-              timestamp: Time.now.iso8601
+              timestamp: Time.now.iso8601,
+              port: port
             })
           end
 
           server.mount_proc '/' do |req, res|
             res.status = 200
             res['Content-Type'] = 'text/plain'
-            res.body = 'Kamal Napper is running'
+            res.body = "Kamal Napper is running on port #{port}"
           end
 
+          # Set up signal handlers for graceful shutdown
+          trap('INT') { server.shutdown }
+          trap('TERM') { server.shutdown }
+
+          info "Health server started successfully on port #{port}"
           server.start
         rescue StandardError => e
-          warn "Health server failed to start: #{e.message}"
+          error "Health server failed to start: #{e.message}"
+          error "Backtrace: #{e.backtrace.join("\n")}"
         end
       end
     end
