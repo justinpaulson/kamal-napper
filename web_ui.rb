@@ -70,6 +70,19 @@ def state_class(state)
   end
 end
 
+# Check if container is actually running
+def get_container_state(hostname)
+  service_name = hostname.split('.').first
+  result = `docker ps --filter "name=#{service_name}-web" --format "{{.Status}}" 2>/dev/null`.strip
+  if result.empty?
+    { running: false, status: 'Not running' }
+  else
+    { running: true, status: result }
+  end
+rescue StandardError
+  { running: false, status: 'Unknown' }
+end
+
 # Format duration nicely
 def format_duration(seconds)
   if seconds < 60
@@ -125,14 +138,18 @@ server.mount_proc("/") do |req, res|
           
           #{status_info[:app_count] > 0 ? '' : '<p class="no-apps">No applications currently managed by Kamal Napper.</p>'}
           
-          #{status_info[:app_count] > 0 ? '<table><tr><th>Application</th><th>Status</th><th>Time in Status</th></tr>' : ''}
+          #{status_info[:app_count] > 0 ? '<table><tr><th>Application</th><th>Tracked State</th><th>Time in State</th><th>Actual State</th><th>Container Status</th></tr>' : ''}
           #{status_info[:apps].map do |hostname, app_info|
               # Get display name - strip .local if present
               display_name = hostname.end_with?('.local') ? hostname.gsub('.local', '') : hostname
+              # Check actual container state
+              container_state = get_container_state(hostname)
               "<tr>" +
               "<td>#{display_name}</td>" +
               "<td><span class=\"#{state_class(app_info[:current_state])}\">#{app_info[:current_state]}</span></td>" +
               "<td>#{format_duration(app_info[:time_in_state])}</td>" +
+              "<td>#{container_state[:running] ? '<span class=\"state-running\">Running</span>' : '<span class=\"state-stopped\">Stopped</span>'}</td>" +
+              "<td><small>#{container_state[:status]}</small></td>" +
               "</tr>"
             end.join if status_info[:app_count] > 0}
           #{status_info[:app_count] > 0 ? '</table>' : ''}
