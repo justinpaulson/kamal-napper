@@ -61,9 +61,8 @@ ENV BUNDLE_PATH=/usr/local/bundle
 # Expose port (if needed for health checks)
 EXPOSE 3000
 
-# Health check - check if any process is running (daemon service)
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD ps aux | grep -v grep | grep -E "(ruby|bundle)" || exit 1
+# No health check needed for daemon service - Kamal will monitor container status
+# HEALTHCHECK NONE
 
 # Default command
 CMD ["bundle", "exec", "/app/bin/kamal-napper", "start", "--daemon"]
