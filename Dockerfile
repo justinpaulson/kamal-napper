@@ -26,10 +26,11 @@ RUN bundle config set --local deployment 'true' && \
 # Production stage
 FROM ruby:3.3-slim as production
 
-# Install runtime dependencies
+# Install runtime dependencies and build tools
 RUN apt-get update && apt-get install -y \
     curl \
     procps \
+    build-essential \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
