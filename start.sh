@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # Kamal Napper startup script
 # Runs both the web UI and the monitoring daemon

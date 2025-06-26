@@ -17,8 +17,8 @@ WORKDIR /app
 # Copy application files
 COPY . /app/
 
-# Make startup script executable
-RUN chmod +x /app/start.sh
+# Make startup script executable and ensure proper shebang
+RUN chmod +x /app/start.sh && ls -la /app/start.sh
 
 # Bundle and install the application
 RUN bundle install
