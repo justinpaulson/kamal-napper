@@ -17,6 +17,9 @@ WORKDIR /app
 # Copy application files
 COPY . /app/
 
+# Make startup script executable
+RUN chmod +x /app/start.sh
+
 # Bundle and install the application
 RUN bundle install
 
@@ -26,5 +29,5 @@ HEALTHCHECK --interval=5s --timeout=3s --start-period=5s --retries=3 \
 
 EXPOSE 80
 
-# Run the web UI
-CMD ["ruby", "web_ui.rb"]
+# Run the startup script that starts both daemon and web UI
+CMD ["/app/start.sh"]
