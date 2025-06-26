@@ -408,10 +408,13 @@ module KamalNapper
         begin
           # Try port 80 first, fallback to 3000 if permission denied
           port = 80
+          server = nil
+
           begin
+            info "Attempting to start health server on port #{port}"
             server = WEBrick::HTTPServer.new(
               Port: port,
-              Logger: WEBrick::Log.new('/dev/null'),
+              Logger: WEBrick::Log.new($stderr, WEBrick::Log::ERROR),
               AccessLog: [],
               BindAddress: '0.0.0.0'
             )
@@ -420,13 +423,13 @@ module KamalNapper
             port = 3000
             server = WEBrick::HTTPServer.new(
               Port: port,
-              Logger: WEBrick::Log.new('/dev/null'),
+              Logger: WEBrick::Log.new($stderr, WEBrick::Log::ERROR),
               AccessLog: [],
               BindAddress: '0.0.0.0'
             )
           end
 
-          info "Health server starting on port #{port}"
+          info "Health server configured on port #{port}"
 
           server.mount_proc '/health' do |req, res|
             res.status = 200
@@ -446,15 +449,15 @@ module KamalNapper
             res.body = "Kamal Napper is running on port #{port}"
           end
 
-          # Set up signal handlers for graceful shutdown
-          trap('INT') { server.shutdown }
-          trap('TERM') { server.shutdown }
-
-          info "Health server started successfully on port #{port}"
+          info "Health server starting on port #{port}..."
           server.start
+          info "Health server started successfully on port #{port}"
         rescue StandardError => e
           error "Health server failed to start: #{e.message}"
           error "Backtrace: #{e.backtrace.join("\n")}"
+          # Don't let health server failure kill the daemon
+          sleep 5
+          retry if @health_server_retries.nil? || (@health_server_retries += 1) < 3
         end
       end
     end
