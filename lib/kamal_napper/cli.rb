@@ -265,7 +265,7 @@ module KamalNapper
       retry_count = 0
       5.times do
         begin
-          uri = URI("http://localhost:3000/health")
+          uri = URI("http://localhost:#{port}/health")
           response = Net::HTTP.get_response(uri)
           if response.code.to_i == 200
             info "Health server is ready and serving requests"
@@ -446,10 +446,9 @@ module KamalNapper
     # Internal method to start the health server
     def start_health_server_internal
       begin
-        # Use port 80 by default (what Kamal expects), with fallback to 3000
-        # Non-privileged users can't bind to ports below 1024, so try both 80 and 3000
-        port = ENV['PORT'] ? ENV['PORT'].to_i : 80
-        bind_attempts = [port, 3000]
+        # Use port 3000 for daemon health server (web UI uses port 80)
+        port = ENV['DAEMON_PORT'] ? ENV['DAEMON_PORT'].to_i : 3000
+        bind_attempts = [port]
         server = nil
         debug_mode = ENV['KAMAL_HEALTH_SERVER_DEBUG'] == 'true'
 
