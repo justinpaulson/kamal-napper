@@ -6,7 +6,7 @@ require 'erb'
 module KamalNapper
   # YAML configuration loader with environment variable overrides and validation
   class ConfigLoader
-    class ConfigError < Error; end
+    class ConfigError < StandardError; end
 
     DEFAULT_CONFIG = {
       'idle_timeout' => 900,
