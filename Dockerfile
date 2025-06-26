@@ -65,4 +65,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD bundle exec /app/bin/kamal-napper health localhost || exit 1
 
 # Default command
-CMD ["bundle", "exec", "/app/bin/kamal-napper", "--daemon"]
+CMD ["bundle", "exec", "/app/bin/kamal-napper", "start", "--daemon"]
