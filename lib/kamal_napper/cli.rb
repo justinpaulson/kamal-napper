@@ -252,8 +252,28 @@ module KamalNapper
         # Write PID file
         write_pidfile(Process.pid)
 
-        # Start health server in background thread
-        start_health_server
+        # Start health server and wait for it to be ready before starting supervisor
+        health_server_ready = false
+        health_server_thread = start_health_server
+        
+        # Wait for health server to be ready (up to 5 seconds)
+        5.times do
+          begin
+            uri = URI("http://localhost:3000/health")
+            response = Net::HTTP.get_response(uri)
+            if response.code.to_i == 200
+              health_server_ready = true
+              break
+            end
+          rescue StandardError
+            # Ignore errors during startup
+          end
+          sleep 1
+        end
+
+        unless health_server_ready
+          error "Health server failed to start in time, continuing anyway"
+        end
 
         # Start supervisor
         supervisor = create_supervisor
@@ -416,7 +436,8 @@ module KamalNapper
               Port: port,
               Logger: WEBrick::Log.new($stderr, WEBrick::Log::ERROR),
               AccessLog: [],
-              BindAddress: '0.0.0.0'
+              BindAddress: '0.0.0.0',
+              StartCallback: Proc.new { info "Health server ready on port #{port}" }
             )
           rescue Errno::EACCES, Errno::EADDRINUSE => e
             error "Cannot bind to port #{port}: #{e.message}"
