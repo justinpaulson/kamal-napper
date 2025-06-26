@@ -14,13 +14,6 @@ proxy:
   ssl: true
   host: kamal-napper.justinpaulson.com
 
-# Health check configuration for daemon service
-healthcheck:
-  path: /health
-  port: 3000
-  max_attempts: 7
-  interval: 20s
-
 # Credentials for your image host.
 registry:
   server: 874101457773.dkr.ecr.us-east-1.amazonaws.com
