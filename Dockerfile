@@ -18,7 +18,9 @@ COPY lib/kamal_napper/version.rb ./lib/kamal_napper/
 RUN bundle config set --local deployment 'true' && \
     bundle config set --local without 'development test' && \
     bundle install --jobs 4 --retry 3 && \
-    bundle exec gem list
+    bundle exec gem list && \
+    echo "Verifying thor gem installation:" && \
+    bundle exec gem list thor
 
 # Production stage
 FROM ruby:3.3-slim as production
