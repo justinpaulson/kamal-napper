@@ -13,12 +13,13 @@ servers:
 proxy:
   ssl: true
   host: kamal-napper.justinpaulson.com
-  # Define specific health check endpoint
-  health_check:
-    path: "/health"
-    port: 3000
-    protocol: http
-    timeout: 30s
+
+# Define health check
+health_check:
+  path: "/health"
+  port: 3000
+  protocol: http
+  timeout: 30s
 
 # Credentials for your image host.
 registry:
