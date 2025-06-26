@@ -57,12 +57,18 @@ module KamalNapper
 
     # Get status of all managed apps
     def status
-      {
+      @logger.info("Getting status, current app count: #{@app_states.size}")
+      @logger.info("App keys: #{@app_states.keys.inspect}")
+      
+      status_info = {
         running: @running,
         app_count: @app_states.size,
         poll_interval: @poll_interval,
         apps: @app_states.transform_values(&:state_summary)
       }
+      
+      @logger.debug("Status info: #{status_info.inspect[0..100]}...")
+      status_info
     end
 
     # Stop all managed apps

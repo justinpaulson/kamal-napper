@@ -55,8 +55,10 @@ module KamalNapper
           return {}
         end
 
-        states = deserialize_app_states(state_data['states'] || {})
-        saved_at = state_data['saved_at']
+        # Support both string and symbol keys
+        states_key = state_data['states'] || state_data[:states] || {}
+        states = deserialize_app_states(states_key)
+        saved_at = state_data['saved_at'] || state_data[:saved_at]
 
         @logger.info("Loaded states for #{states.size} apps (saved at #{saved_at})")
         states
@@ -66,6 +68,7 @@ module KamalNapper
         {}
       rescue StandardError => e
         @logger.error("Failed to load states: #{e.message}")
+        @logger.error(e.backtrace.join("\n"))
         backup_corrupted_state_file
         {}
       end
