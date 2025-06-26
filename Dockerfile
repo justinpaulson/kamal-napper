@@ -62,9 +62,11 @@ ENV BUNDLE_PATH=/usr/local/bundle
 # Expose port 80 for Kamal health checks
 EXPOSE 80
 
-# Simple health check configuration
-HEALTHCHECK --interval=5s --timeout=3s --start-period=2s --retries=3 \
+# Simple health check with longer start period
+HEALTHCHECK --interval=5s --timeout=3s --start-period=10s --retries=3 \
   CMD curl -f http://localhost/health || exit 1
 
-# Run a simple health check server directly
+# Install webrick first, then run a simple health check server
+RUN gem install webrick --no-document
+
 CMD ruby -rwebrick -rjson -e 'server = WEBrick::HTTPServer.new(:Port => 80, :BindAddress => "0.0.0.0", :AccessLog => []); server.mount_proc("/health") { |req, res| res.status = 200; res["Content-Type"] = "application/json"; res.body = JSON.generate({status: "ok", service: "kamal-napper", timestamp: Time.now}) }; puts "Health server ready on port 80"; trap("INT") { server.shutdown }; server.start'
