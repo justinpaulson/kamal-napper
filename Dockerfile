@@ -58,12 +58,12 @@ ENV BUNDLE_DEPLOYMENT=true
 ENV BUNDLE_WITHOUT=development:test
 ENV BUNDLE_PATH=/usr/local/bundle
 
-# Expose port (if needed for health checks)
-EXPOSE 3000
+# Expose port 80 for Kamal health checks
+EXPOSE 80
 
-# Health check for Kamal deployment with extended timeouts
+# Health check configuration for Kamal compatibility
 HEALTHCHECK --interval=10s --timeout=5s --start-period=20s --retries=5 \
-  CMD curl -f http://localhost:3000/health || exit 1
+  CMD curl -f http://localhost/health || exit 1
 
-# Default command
-CMD ["bundle", "exec", "/app/bin/kamal-napper", "start", "--daemon"]
+# Run in foreground mode for better compatibility with Kamal
+CMD ["bundle", "exec", "/app/bin/kamal-napper", "start"]

@@ -14,12 +14,7 @@ proxy:
   ssl: true
   host: kamal-napper.justinpaulson.com
 
-# Health check configuration
-healthcheck:
-  path: /health
-  port: 3000
-  interval: 10s
-  max_attempts: 5
+# Default configuration, no custom health check settings needed
 
 # Credentials for your image host.
 registry:

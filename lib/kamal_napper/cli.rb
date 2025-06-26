@@ -446,8 +446,8 @@ module KamalNapper
     # Internal method to start the health server
     def start_health_server_internal
       begin
-        # Always use port 3000 for health checks to match Dockerfile HEALTHCHECK
-        port = 3000
+        # Use port 80 by default (what Kamal expects), with fallback to 3000
+        port = ENV['PORT'] || 80
         server = nil
         debug_mode = ENV['KAMAL_HEALTH_SERVER_DEBUG'] == 'true'
 
