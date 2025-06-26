@@ -17,6 +17,7 @@ COPY lib/kamal_napper/version.rb ./lib/kamal_napper/
 # Install gems
 RUN bundle config set --local deployment 'true' && \
     bundle config set --local without 'development test' && \
+    bundle config set --local path '/usr/local/bundle' && \
     bundle install --jobs 4 --retry 3 && \
     bundle exec gem list && \
     echo "Verifying thor gem installation:" && \
