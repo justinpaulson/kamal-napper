@@ -3,6 +3,7 @@ PATH
   specs:
     kamal-napper (0.1.0)
       thor (~> 1.0)
+      webrick (~> 1.8)
       yaml (~> 0.2)
 
 GEM
@@ -24,6 +25,7 @@ GEM
       rspec-support (~> 3.13.0)
     rspec-support (3.13.4)
     thor (1.3.2)
+    webrick (1.9.1)
     yaml (0.4.0)
 
 PLATFORMS

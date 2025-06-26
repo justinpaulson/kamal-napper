@@ -41,6 +41,7 @@ Gem::Specification.new do |spec|
   # Runtime dependencies
   spec.add_dependency "thor", "~> 1.0"
   spec.add_dependency "yaml", "~> 0.2"
+  spec.add_dependency "webrick", "~> 1.8"
 
   # Development dependencies
   spec.add_development_dependency "bundler", "~> 2.0"
