@@ -58,29 +58,32 @@ def get_supervisor
   KamalNapper::Supervisor.new(logger: @logger, config: @config)
 end
 
-# Get state CSS class based on app state
-def state_class(state)
-  case state
-  when :running then "state-running"
-  when :idle then "state-idle"
-  when :starting then "state-starting"
-  when :stopping then "state-stopping"
-  when :stopped then "state-stopped"
-  else "state-unknown"
-  end
-end
-
-# Check if container is actually running
-def get_container_state(hostname)
+# Get combined app state (actual state + tracked state)
+def get_app_state(hostname, app_info)
   service_name = hostname.split('.').first
+  tracked_state = app_info[:current_state]
+  
+  # Get actual container state from Docker
   result = `docker ps --filter "name=#{service_name}-web" --format "{{.Status}}" 2>/dev/null`.strip
-  if result.empty?
-    { running: false, status: 'Not running' }
+  container_running = !result.empty?
+  container_status = result.empty? ? 'Not running' : result
+  
+  # Determine the real state based on container state and tracked state
+  if container_running
+    if tracked_state == :starting
+      { state: 'Starting', css_class: 'state-starting', description: 'Container is starting up', status: container_status }
+    elsif tracked_state == :stopping
+      { state: 'Stopping', css_class: 'state-stopping', description: 'Container is shutting down', status: container_status }
+    elsif tracked_state == :idle
+      { state: 'Idle', css_class: 'state-idle', description: 'Running but idle', status: container_status }
+    else
+      { state: 'Running', css_class: 'state-running', description: 'Container is active', status: container_status }
+    end
   else
-    { running: true, status: result }
+    { state: 'Stopped', css_class: 'state-stopped', description: 'Container is not running', status: container_status }
   end
-rescue StandardError
-  { running: false, status: 'Unknown' }
+rescue StandardError => e
+  { state: 'Unknown', css_class: 'state-unknown', description: "Error: #{e.message}", status: 'Error getting status' }
 end
 
 # Format duration nicely
@@ -138,18 +141,17 @@ server.mount_proc("/") do |req, res|
           
           #{status_info[:app_count] > 0 ? '' : '<p class="no-apps">No applications currently managed by Kamal Napper.</p>'}
           
-          #{status_info[:app_count] > 0 ? '<table><tr><th>Application</th><th>Tracked State</th><th>Time in State</th><th>Actual State</th><th>Container Status</th></tr>' : ''}
+          #{status_info[:app_count] > 0 ? '<table><tr><th>Application</th><th>State</th><th>Details</th><th>Container Status</th></tr>' : ''}
           #{status_info[:apps].map do |hostname, app_info|
               # Get display name - strip .local if present
               display_name = hostname.end_with?('.local') ? hostname.gsub('.local', '') : hostname
-              # Check actual container state
-              container_state = get_container_state(hostname)
+              # Get combined app state
+              app_state = get_app_state(hostname, app_info)
               "<tr>" +
               "<td>#{display_name}</td>" +
-              "<td><span class=\"#{state_class(app_info[:current_state])}\">#{app_info[:current_state]}</span></td>" +
-              "<td>#{format_duration(app_info[:time_in_state])}</td>" +
-              "<td>#{container_state[:running] ? '<span class=\"state-running\">Running</span>' : '<span class=\"state-stopped\">Stopped</span>'}</td>" +
-              "<td><small>#{container_state[:status]}</small></td>" +
+              "<td><span class=\"#{app_state[:css_class]}\">#{app_state[:state]}</span></td>" +
+              "<td>#{app_state[:description]}</td>" +
+              "<td><small>#{app_state[:status]}</small></td>" +
               "</tr>"
             end.join if status_info[:app_count] > 0}
           #{status_info[:app_count] > 0 ? '</table>' : ''}
