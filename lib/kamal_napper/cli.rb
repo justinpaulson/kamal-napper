@@ -447,7 +447,9 @@ module KamalNapper
     def start_health_server_internal
       begin
         # Use port 80 by default (what Kamal expects), with fallback to 3000
-        port = ENV['PORT'] || 80
+        # Non-privileged users can't bind to ports below 1024, so try both 80 and 3000
+        port = ENV['PORT'] ? ENV['PORT'].to_i : 80
+        bind_attempts = [port, 3000]
         server = nil
         debug_mode = ENV['KAMAL_HEALTH_SERVER_DEBUG'] == 'true'
 
@@ -457,18 +459,32 @@ module KamalNapper
         info "Process user: #{`whoami`.strip}"
         info "Environment: #{ENV.to_h.select { |k,v| k.start_with?('KAMAL') }.inspect}"
 
-        begin
-          info "Starting health server on port #{port}"
-          logger_level = debug_mode ? WEBrick::Log::DEBUG : WEBrick::Log::ERROR
-          server = WEBrick::HTTPServer.new(
-            Port: port,
-            Logger: WEBrick::Log.new($stderr, logger_level),
-            AccessLog: debug_mode ? nil : [],
-            BindAddress: '0.0.0.0',
-            StartCallback: Proc.new { info "Health server ready on port #{port}" }
-          )
-        rescue Errno::EACCES, Errno::EADDRINUSE => e
-          error "Cannot bind to port #{port}: #{e.message}"
+        server = nil
+        success = false
+        
+        # Try each port until one works
+        bind_attempts.each do |attempt_port|
+          begin
+            info "Attempting to start health server on port #{attempt_port}"
+            logger_level = debug_mode ? WEBrick::Log::DEBUG : WEBrick::Log::ERROR
+            server = WEBrick::HTTPServer.new(
+              Port: attempt_port,
+              Logger: WEBrick::Log.new($stderr, logger_level),
+              AccessLog: debug_mode ? nil : [],
+              BindAddress: '0.0.0.0',
+              StartCallback: Proc.new { info "Health server ready on port #{attempt_port}" }
+            )
+            port = attempt_port  # Update the port to the one that worked
+            success = true
+            info "Successfully bound to port #{port}"
+            break
+          rescue Errno::EACCES, Errno::EADDRINUSE => e
+            error "Cannot bind to port #{attempt_port}: #{e.message}"
+          end
+        end
+        
+        unless success
+          error "Failed to bind to any port, health server will not be available"
           return
         end
 

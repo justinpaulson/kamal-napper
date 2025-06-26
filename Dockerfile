@@ -45,8 +45,9 @@ COPY --from=builder /usr/local/bundle /usr/local/bundle
 # Copy application code
 COPY --chown=kamal:kamal . .
 
-# Create necessary directories with proper permissions
+# Create necessary directories with proper permissions - use 777 for container compatibility
 RUN mkdir -p /var/lib/kamal-napper /var/log/kamal-napper && \
+    chmod -R 777 /var/lib/kamal-napper /var/log/kamal-napper && \
     chown -R kamal:kamal /var/lib/kamal-napper /var/log/kamal-napper /app
 
 # Switch to non-root user
@@ -61,9 +62,9 @@ ENV BUNDLE_PATH=/usr/local/bundle
 # Expose port 80 for Kamal health checks
 EXPOSE 80
 
-# Health check configuration for Kamal compatibility
+# Health check configuration for Kamal compatibility (try both ports)
 HEALTHCHECK --interval=10s --timeout=5s --start-period=20s --retries=5 \
-  CMD curl -f http://localhost/health || exit 1
+  CMD curl -f http://localhost/health || curl -f http://localhost:3000/health || exit 1
 
 # Run in foreground mode for better compatibility with Kamal
 CMD ["bundle", "exec", "/app/bin/kamal-napper", "start"]
