@@ -6,7 +6,7 @@ require 'set'
 module KamalNapper
   # Kamal command interface with retry logic and error handling
   class Runner
-    class CommandError < Error; end
+    class CommandError < StandardError; end
 
     def initialize(logger: nil, config: nil)
       @logger = logger || Logger.new

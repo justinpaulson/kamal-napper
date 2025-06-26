@@ -5,7 +5,7 @@ require 'set'
 module KamalNapper
   # Main daemon loop that monitors apps and manages their lifecycle
   class Supervisor
-    class SupervisorError < Error; end
+    class SupervisorError < StandardError; end
 
     def initialize(logger: nil, config: nil)
       @logger = logger || Logger.new

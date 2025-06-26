@@ -7,7 +7,7 @@ require 'tempfile'
 module KamalNapper
   # State persistence to disk with atomic writes and error handling
   class StatePersistence
-    class PersistenceError < Error; end
+    class PersistenceError < StandardError; end
 
     DEFAULT_STATE_DIR = '/var/lib/kamal-napper'
     DEFAULT_STATE_FILE = 'state.yml'

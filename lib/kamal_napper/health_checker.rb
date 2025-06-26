@@ -7,7 +7,7 @@ require 'timeout'
 module KamalNapper
   # HTTP health checking with timeout handling and custom endpoints
   class HealthChecker
-    class HealthCheckError < Error; end
+    class HealthCheckError < StandardError; end
 
     DEFAULT_TIMEOUT = 10
     DEFAULT_PATH = '/health'

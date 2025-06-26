@@ -6,7 +6,7 @@ require 'set'
 module KamalNapper
   # Log parsing and request detection with fallback mechanisms
   class RequestDetector
-    class DetectionError < Error; end
+    class DetectionError < StandardError; end
 
     LOG_PATH = '/var/log/kamal-proxy'
     TIMESTAMP_FILE_PREFIX = '/tmp/kamal_napper_last_request'

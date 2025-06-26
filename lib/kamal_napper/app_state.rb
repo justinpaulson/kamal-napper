@@ -3,7 +3,7 @@
 module KamalNapper
   # Application state management with state machine and transition tracking
   class AppState
-    class StateError < Error; end
+    class StateError < StandardError; end
 
     # Valid application states
     STATES = %i[stopped idle running starting stopping].freeze
