@@ -60,9 +60,9 @@ ENV BUNDLE_PATH=/usr/local/bundle
 # Expose port (if needed for health checks)
 EXPOSE 3000
 
-# Health check
+# Health check - just verify the daemon process is running
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD bundle exec /app/bin/kamal-napper health localhost || exit 1
+    CMD pgrep -f "kamal-napper" > /dev/null || exit 1
 
 # Default command
 CMD ["bundle", "exec", "/app/bin/kamal-napper", "start", "--daemon"]
