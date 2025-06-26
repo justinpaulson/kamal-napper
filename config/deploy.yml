@@ -37,49 +37,13 @@ builder:
 ssh:
   user: ubuntu
 
-# Configure custom healthcheck for kamal-napper
-healthcheck:
-  path: /health
-  port: 3000
-  max_attempts: 7
-  interval: 20s
-
 # Volume mounts for kamal-napper functionality
 volumes:
   - "/var/log/kamal-proxy:/var/log/kamal-proxy:ro"
   - "/var/lib/kamal-napper:/var/lib/kamal-napper"
   - "/var/run/docker.sock:/var/run/docker.sock"
 
-# Asset path (for maintenance page)
-asset_path: /templates
-
 # Labels and metadata
 labels:
   app.name: "kamal-napper"
   app.version: "1.0.0"
-
-# Logging configuration
-logging:
-  driver: json-file
-  options:
-    max-size: "10m"
-    max-file: "3"
-
-# Resource limits
-resources:
-  memory: 512m
-  cpus: 0.5
-
-# Restart policy
-restart: unless-stopped
-
-# Pre-deploy hooks
-hooks:
-  pre-deploy:
-    - echo "Starting deployment of Kamal Napper"
-    - docker system prune -f
-
-# Post-deploy hooks
-  post-deploy:
-    - echo "Kamal Napper deployment completed"
-    - docker logs kamal-napper --tail 50
