@@ -15,7 +15,7 @@ cd /app
 
 # Start the monitoring daemon in the background
 echo "Starting Kamal Napper daemon..."
-ruby bin/kamal-napper start --daemon
+ruby bin/kamal-napper start --daemon &
 
 # Wait a moment for daemon to initialize
 sleep 5
