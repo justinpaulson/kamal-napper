@@ -61,8 +61,9 @@ ENV BUNDLE_PATH=/usr/local/bundle
 # Expose port (if needed for health checks)
 EXPOSE 3000
 
-# No health check needed for daemon service - Kamal will monitor container status
-# HEALTHCHECK NONE
+# Health check for Kamal deployment
+HEALTHCHECK --interval=5s --timeout=3s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:3000/health || exit 1
 
 # Default command
 CMD ["bundle", "exec", "/app/bin/kamal-napper", "start", "--daemon"]

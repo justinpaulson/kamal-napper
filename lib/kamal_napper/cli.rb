@@ -406,12 +406,12 @@ module KamalNapper
     def start_health_server
       Thread.new do
         begin
-          # Try port 80 first, fallback to 3000 if permission denied
-          port = 80
+          # Always use port 3000 for health checks to match Dockerfile HEALTHCHECK
+          port = 3000
           server = nil
 
           begin
-            info "Attempting to start health server on port #{port}"
+            info "Starting health server on port #{port}"
             server = WEBrick::HTTPServer.new(
               Port: port,
               Logger: WEBrick::Log.new($stderr, WEBrick::Log::ERROR),
@@ -419,14 +419,8 @@ module KamalNapper
               BindAddress: '0.0.0.0'
             )
           rescue Errno::EACCES, Errno::EADDRINUSE => e
-            warn "Cannot bind to port #{port}: #{e.message}, trying port 3000"
-            port = 3000
-            server = WEBrick::HTTPServer.new(
-              Port: port,
-              Logger: WEBrick::Log.new($stderr, WEBrick::Log::ERROR),
-              AccessLog: [],
-              BindAddress: '0.0.0.0'
-            )
+            error "Cannot bind to port #{port}: #{e.message}"
+            return
           end
 
           info "Health server configured on port #{port}"
