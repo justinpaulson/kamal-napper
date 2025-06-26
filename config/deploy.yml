@@ -14,14 +14,12 @@ proxy:
   ssl: true
   host: kamal-napper.justinpaulson.com
 
-# Define application-specific settings
-application:
-  healthcheck:
-    path: "/health"
-    port: 3000
-    timeout: 30
-    interval: 10
-    retries: 5
+# Health check configuration
+healthcheck:
+  path: /health
+  port: 3000
+  interval: 10s
+  max_attempts: 5
 
 # Credentials for your image host.
 registry:
