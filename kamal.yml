@@ -1,0 +1,116 @@
+# Kamal deployment configuration for Kamal Napper
+service: kamal-napper
+
+# Image configuration
+image: kamal-napper
+
+# Build configuration
+builder:
+  multiarch: false
+  cache:
+    type: gha
+
+# Registry configuration (customize as needed)
+registry:
+  # server: ghcr.io
+  # username: your-username
+  # password:
+  #   - KAMAL_REGISTRY_PASSWORD
+
+# Server configuration
+servers:
+  web:
+    - 192.168.1.100  # Replace with your server IP
+    # - your-server.com
+
+# Environment variables
+env:
+  clear:
+    RACK_ENV: production
+    KAMAL_NAPPER_LOG_LEVEL: info
+  secret:
+    - KAMAL_NAPPER_SECRET_KEY
+
+# Volume mounts
+volumes:
+  - "/var/log/kamal-proxy:/var/log/kamal-proxy:ro"
+  - "/var/lib/kamal-napper:/var/lib/kamal-napper"
+  - "/var/run/docker.sock:/var/run/docker.sock"
+
+# Asset path (for maintenance page)
+asset_path: /templates
+
+# Labels and metadata
+labels:
+  traefik.enable: "true"
+  traefik.http.routers.kamal-napper.rule: "Host(`your-domain.com`)"
+  traefik.http.routers.kamal-napper.tls: "true"
+  traefik.http.routers.kamal-napper.tls.certresolver: "letsencrypt"
+  app.name: "kamal-napper"
+  app.version: "1.0.0"
+
+# Health check configuration
+healthcheck:
+  path: /health
+  port: 3000
+  max_attempts: 7
+  interval: 20s
+
+# SSH configuration
+ssh:
+  user: deploy
+  port: 22
+  keys_only: true
+  keys:
+    - ~/.ssh/id_rsa
+
+# Logging configuration
+logging:
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+# Resource limits
+resources:
+  memory: 512m
+  cpus: 0.5
+
+# Restart policy
+restart: unless-stopped
+
+# Network configuration
+network: kamal-napper-network
+
+# Maintenance page configuration
+maintenance:
+  path: templates/503.html
+
+# Pre-deploy hooks
+hooks:
+  pre-deploy:
+    - echo "Starting deployment of Kamal Napper"
+    - docker system prune -f
+
+# Post-deploy hooks
+  post-deploy:
+    - echo "Kamal Napper deployment completed"
+    - docker logs kamal-napper --tail 50
+
+# Backup configuration for state persistence
+backup:
+  schedule: "0 2 * * *"  # Daily at 2 AM
+  retention: 7  # Keep 7 days of backups
+  paths:
+    - /var/lib/kamal-napper
+
+# Monitoring and alerting
+monitoring:
+  enabled: true
+  metrics_port: 9090
+
+# Security settings
+security:
+  run_as_user: kamal
+  read_only_root_filesystem: false
+  no_new_privileges: true

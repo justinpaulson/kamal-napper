@@ -1,0 +1,19 @@
+# Kamal Napper Configuration
+# Default configuration values for managing idle Kamal deployments
+
+# Time in seconds before a deployment is considered idle
+idle_timeout: 900
+
+# Interval in seconds between polling checks
+poll_interval: 10
+
+# Maximum time in seconds to wait for a deployment to start up
+startup_timeout: 60
+
+# Maximum number of retry attempts for operations
+max_retries: 3
+
+# Applications are now automatically discovered from:
+# - kamal-proxy access logs for active hostnames
+# - Docker containers with Kamal labels
+# - Kamal deployment metadata

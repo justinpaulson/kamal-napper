@@ -1,0 +1,85 @@
+# Name of your application. Used to uniquely configure containers.
+service: kamal-napper
+
+# Name of the container image.
+image: kamal-napper
+
+# Deploy to these servers.
+servers:
+  web:
+    - 18.206.154.53
+
+# Use kamal-proxy instead of Traefik
+proxy:
+  ssl: true
+  host: kamal-napper.justinpaulson.com
+
+# Credentials for your image host.
+registry:
+  server: 874101457773.dkr.ecr.us-east-1.amazonaws.com
+  username: AWS
+  # Always use an access token rather than real password when possible.
+  password: <%= %x(aws --profile=personal --region=us-east-1 ecr get-login-password) %>
+
+# Inject ENV variables into containers (secrets come from .env file).
+env:
+  clear:
+    RACK_ENV: production
+    KAMAL_NAPPER_LOG_LEVEL: info
+  secret:
+    - KAMAL_NAPPER_SECRET_KEY
+
+# Configure the image builder.
+builder:
+  arch: amd64
+
+# Use a different ssh user than root
+ssh:
+  user: ubuntu
+
+# Configure custom healthcheck for kamal-napper
+healthcheck:
+  path: /health
+  port: 3000
+  max_attempts: 7
+  interval: 20s
+
+# Volume mounts for kamal-napper functionality
+volumes:
+  - "/var/log/kamal-proxy:/var/log/kamal-proxy:ro"
+  - "/var/lib/kamal-napper:/var/lib/kamal-napper"
+  - "/var/run/docker.sock:/var/run/docker.sock"
+
+# Asset path (for maintenance page)
+asset_path: /templates
+
+# Labels and metadata
+labels:
+  app.name: "kamal-napper"
+  app.version: "1.0.0"
+
+# Logging configuration
+logging:
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+# Resource limits
+resources:
+  memory: 512m
+  cpus: 0.5
+
+# Restart policy
+restart: unless-stopped
+
+# Pre-deploy hooks
+hooks:
+  pre-deploy:
+    - echo "Starting deployment of Kamal Napper"
+    - docker system prune -f
+
+# Post-deploy hooks
+  post-deploy:
+    - echo "Kamal Napper deployment completed"
+    - docker logs kamal-napper --tail 50

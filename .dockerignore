@@ -1,0 +1,116 @@
+# Git files
+.git
+.gitignore
+.gitattributes
+
+# Documentation
+README.md
+CHANGELOG.md
+CONTRIBUTING.md
+docs/
+*.md
+
+# Development and test files
+spec/
+test/
+tests/
+.rspec
+.rubocop.yml
+.rubocop_todo.yml
+Rakefile
+
+# Local configuration
+.env
+.env.local
+.env.development
+.env.test
+config/database.yml
+config/secrets.yml
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+log/
+logs/
+tmp/
+
+# Cache and temporary files
+.cache/
+.tmp/
+.sass-cache/
+node_modules/
+coverage/
+
+# Build artifacts
+pkg/
+*.gem
+*.rbc
+.bundle/
+vendor/bundle/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Docker files (avoid recursive copying)
+Dockerfile*
+.dockerignore
+docker-compose*.yml
+
+# Deployment files
+kamal.yml
+.kamal/
+
+# Local development
+.byebug_history
+.pry_history
+.irb_history
+
+# Backup files
+*.bak
+*.backup
+*~
+
+# System files
+*.pid
+*.seed
+*.pid.lock
+
+# Runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage/
+.nyc_output/
+
+# Dependency directories
+node_modules/
+jspm_packages/
+
+# Optional npm cache directory
+.npm
+
+# Optional REPL history
+.node_repl_history
+
+# Output of 'npm pack'
+*.tgz
+
+# Yarn Integrity file
+.yarn-integrity

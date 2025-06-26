@@ -1,0 +1,12 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require_relative "../lib/kamal_napper"
+
+# Main executable for Kamal Napper
+begin
+  KamalNapper::CLI.start(ARGV)
+rescue StandardError => e
+  $stderr.puts "Error: #{e.message}"
+  exit 1
+end
