@@ -21,9 +21,17 @@ Gem::Specification.new do |spec|
 
   # Specify which files should be added to the gem when it is released.
   spec.files = Dir.chdir(__dir__) do
-    `git ls-files -z`.split("\x0").reject do |f|
-      (File.expand_path(f) == __FILE__) ||
-        f.start_with?(*%w[bin/ test/ spec/ features/ .git .github appveyor Gemfile])
+    if system('git --version > /dev/null 2>&1')
+      `git ls-files -z`.split("\x0").reject do |f|
+        (File.expand_path(f) == __FILE__) ||
+          f.start_with?(*%w[bin/ test/ spec/ features/ .git .github appveyor Gemfile])
+      end
+    else
+      # Fallback when git is not available (e.g., in production containers)
+      Dir.glob('**/*', File::FNM_DOTMATCH).reject do |f|
+        File.directory?(f) || (File.expand_path(f) == __FILE__) ||
+          f.start_with?(*%w[bin/ test/ spec/ features/ .git .github appveyor Gemfile])
+      end
     end
   end
   spec.bindir = "bin"
