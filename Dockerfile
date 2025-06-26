@@ -70,8 +70,8 @@ HEALTHCHECK --interval=5s --timeout=3s --start-period=10s --retries=3 \
 # Install webrick first, then run a simple health check server
 RUN gem install webrick --no-document
 
-# Add Sinatra for minimal web UI
-RUN gem install sinatra webrick json --no-document
+# We just need webrick for the simple web UI
+RUN gem install webrick --no-document
 
 # Copy our web UI app
 COPY web_ui.rb /app/web_ui.rb

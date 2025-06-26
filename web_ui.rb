@@ -1,102 +1,54 @@
 #!/usr/bin/env ruby
 
-require "sinatra"
-require "json"
+require "webrick"
 
-set :bind, "0.0.0.0"
-set :port, 80
+# Create a simple web server
+server = WEBrick::HTTPServer.new(
+  :Port => 80,
+  :BindAddress => "0.0.0.0",
+  :AccessLog => []
+)
 
-# Apps status (simple in-memory store for demo)
-$apps = {
-  "app1.example.com" => { :status => "running", :last_active => Time.now },
-  "app2.example.com" => { :status => "sleeping", :last_active => Time.now - 3600 }
-}
-
-# Health check endpoint
-get "/health" do
-  content_type :json
-  { :status => "ok", :service => "kamal-napper", :timestamp => Time.now }.to_json
+# Health check endpoint - exactly what Kamal needs
+server.mount_proc("/health") do |req, res|
+  res.status = 200
+  res['Content-Type'] = 'application/json'
+  res.body = '{"status":"ok","service":"kamal-napper","timestamp":"' + Time.now.to_s + '"}'
 end
 
-# Required for Kamal proxy
-get "/up" do
-  "OK"
+# UP endpoint for Kamal proxy
+server.mount_proc("/up") do |req, res|
+  res.status = 200
+  res['Content-Type'] = 'text/plain'
+  res.body = "OK"
 end
 
-# Main UI page
-get "/" do
-  html = <<-HTML
+# Default page with basic info
+server.mount_proc("/") do |req, res|
+  res.status = 200
+  res['Content-Type'] = 'text/html'
+  res.body = <<-HTML
     <!DOCTYPE html>
     <html>
-      <head>
-        <title>Kamal Napper</title>
-        <style>
-          body { font-family: sans-serif; margin: 20px; }
-          h1 { color: #333; }
-          table { border-collapse: collapse; width: 100%; }
-          th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-          th { background-color: #f2f2f2; }
-          .running { color: green; }
-          .sleeping { color: orange; }
-        </style>
-      </head>
-      <body>
-        <h1>Kamal Napper Dashboard</h1>
-        <p>Manage your apps that are controlled by Kamal Napper</p>
-        <table>
-          <tr>
-            <th>Hostname</th>
-            <th>Status</th>
-            <th>Last Active</th>
-            <th>Actions</th>
-          </tr>
-          #{$apps.map { |hostname, data|
-            "<tr>
-              <td>#{hostname}</td>
-              <td class=\"#{data[:status]}\">#{data[:status]}</td>
-              <td>#{data[:last_active].strftime("%Y-%m-%d %H:%M")}</td>
-              <td>
-                <a href=\"/wake/#{hostname}\">Wake</a> |
-                <a href=\"/sleep/#{hostname}\">Sleep</a>
-              </td>
-            </tr>"
-          }.join}
-        </table>
-      </body>
+    <head>
+      <title>Kamal Napper</title>
+      <style>
+        body { font-family: sans-serif; margin: 20px; }
+        h1 { color: #333; }
+      </style>
+    </head>
+    <body>
+      <h1>Kamal Napper is Running!</h1>
+      <p>This is a simple service that manages your Kamal apps by turning them on and off.</p>
+      <p>Server time: #{Time.now}</p>
+    </body>
     </html>
   HTML
-  html
 end
 
-# Wake an app
-get "/wake/:hostname" do
-  hostname = params[:hostname]
-  if $apps[hostname]
-    $apps[hostname][:status] = "running"
-    $apps[hostname][:last_active] = Time.now
-    redirect "/"
-  else
-    status 404
-    "App not found"
-  end
-end
+# Set up signal handling
+trap('INT') { server.shutdown }
 
-# Put an app to sleep
-get "/sleep/:hostname" do
-  hostname = params[:hostname]
-  if $apps[hostname]
-    $apps[hostname][:status] = "sleeping"
-    redirect "/"
-  else
-    status 404
-    "App not found"
-  end
-end
-
-# API endpoints
-get "/api/apps" do
-  content_type :json
-  $apps.to_json
-end
-
+# Start the server
 puts "Starting Kamal Napper Web UI on port 80..."
+server.start
