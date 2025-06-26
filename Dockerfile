@@ -17,7 +17,8 @@ COPY lib/kamal_napper/version.rb ./lib/kamal_napper/
 # Install gems
 RUN bundle config set --local deployment 'true' && \
     bundle config set --local without 'development test' && \
-    bundle install --jobs 4 --retry 3
+    bundle install --jobs 4 --retry 3 && \
+    bundle exec gem list
 
 # Production stage
 FROM ruby:3.3-slim as production
