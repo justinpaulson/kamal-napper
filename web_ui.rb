@@ -127,8 +127,10 @@ server.mount_proc("/") do |req, res|
           
           #{status_info[:app_count] > 0 ? '<table><tr><th>Application</th><th>Status</th><th>Time in Status</th></tr>' : ''}
           #{status_info[:apps].map do |hostname, app_info|
+              # Get display name - strip .local if present
+              display_name = hostname.end_with?('.local') ? hostname.gsub('.local', '') : hostname
               "<tr>" +
-              "<td>#{hostname}</td>" +
+              "<td>#{display_name}</td>" +
               "<td><span class=\"#{state_class(app_info[:current_state])}\">#{app_info[:current_state]}</span></td>" +
               "<td>#{format_duration(app_info[:time_in_state])}</td>" +
               "</tr>"

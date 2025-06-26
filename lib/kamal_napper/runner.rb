@@ -94,7 +94,7 @@ module KamalNapper
               service_name = label_hash['service']
 
               # Try to determine hostname from traefik labels or service name
-              hostname = extract_hostname_from_labels(label_hash) || "#{service_name}.local"
+              hostname = extract_hostname_from_labels(label_hash) || "#{service_name}.justinpaulson.com"
 
               apps[hostname] = {
                 service: service_name,
