@@ -407,7 +407,7 @@ module KamalNapper
       Thread.new do
         begin
           server = WEBrick::HTTPServer.new(
-            Port: 3000,
+            Port: 80,
             Logger: WEBrick::Log.new('/dev/null'),
             AccessLog: []
           )

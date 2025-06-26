@@ -43,10 +43,6 @@ volumes:
   - "/var/lib/kamal-napper:/var/lib/kamal-napper"
   - "/var/run/docker.sock:/var/run/docker.sock"
 
-# Health check configuration
-healthcheck:
-  port: 3000
-  path: /health
 
 # Labels and metadata
 labels:
