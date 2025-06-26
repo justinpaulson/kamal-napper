@@ -54,13 +54,14 @@ USER kamal
 ENV RACK_ENV=production
 ENV BUNDLE_DEPLOYMENT=true
 ENV BUNDLE_WITHOUT=development:test
+ENV BUNDLE_PATH=/usr/local/bundle
 
 # Expose port (if needed for health checks)
 EXPOSE 3000
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD /app/bin/kamal-napper health localhost || exit 1
+    CMD bundle exec /app/bin/kamal-napper health localhost || exit 1
 
 # Default command
-CMD ["/app/bin/kamal-napper", "--daemon"]
+CMD ["bundle", "exec", "/app/bin/kamal-napper", "--daemon"]
