@@ -1,18 +1,27 @@
-FROM nginx:alpine
+FROM ruby:3.3-alpine
 
-# Copy health check HTML page
-RUN mkdir -p /usr/share/nginx/html
-RUN echo '<!DOCTYPE html><html><body><h1>Kamal Napper is Running!</h1></body></html>' > /usr/share/nginx/html/index.html
-RUN echo '{"status":"ok","service":"kamal-napper"}' > /usr/share/nginx/html/health
-RUN echo 'OK' > /usr/share/nginx/html/up
+# Install dependencies
+RUN apk add --no-cache \
+    build-base \
+    tzdata \
+    git \
+    curl \
+    wget
 
-# Non-privileged user
-RUN chown -R nginx:nginx /usr/share/nginx/html
+# Set working directory
+WORKDIR /app
 
-# Health check configuration
+# Copy application files
+COPY . /app/
+
+# Bundle and install the application
+RUN bundle install
+
+# Configure health check
 HEALTHCHECK --interval=5s --timeout=3s --start-period=5s --retries=3 \
-  CMD wget -q -O- http://localhost/health || exit 1
+  CMD wget -q -O- http://localhost:80/health || exit 1
 
 EXPOSE 80
 
-# Use nginx's default CMD
+# Run the web UI
+CMD ["ruby", "web_ui.rb"]
