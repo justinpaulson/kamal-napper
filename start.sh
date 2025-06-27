@@ -15,16 +15,29 @@ cd /app
 
 # Start the monitoring daemon in the background
 echo "Starting Kamal Napper daemon..."
-ruby bin/kamal-napper start --daemon &
+ruby bin/kamal-napper start --daemon > /tmp/daemon.log 2>&1 &
+daemon_pid=$!
 
-# Wait a moment for daemon to initialize
-sleep 5
+# Wait longer for daemon to initialize and check if it's still running
+sleep 10
 
-# Verify daemon is running
-if ruby bin/kamal-napper status > /dev/null 2>&1; then
-    echo "Daemon is running successfully"
+# Check if daemon process is still alive
+if kill -0 $daemon_pid 2>/dev/null; then
+    echo "Daemon process is still running (PID: $daemon_pid)"
+    
+    # Verify daemon is responding to status checks
+    if ruby bin/kamal-napper status > /dev/null 2>&1; then
+        echo "Daemon is running successfully and responding to status checks"
+    else
+        echo "WARNING: Daemon process exists but not responding to status checks"
+        echo "Daemon logs:"
+        cat /tmp/daemon.log
+    fi
 else
-    echo "WARNING: Daemon may not be running properly, but continuing with web UI"
+    echo "ERROR: Daemon process has crashed"
+    echo "Daemon logs:"
+    cat /tmp/daemon.log
+    echo "Continuing with web UI anyway..."
 fi
 
 # Start the web UI in the foreground (this keeps the container running)
