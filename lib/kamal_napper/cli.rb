@@ -5,6 +5,8 @@ require 'json'
 require 'fileutils'
 require 'webrick'
 require 'thread'
+require 'net/http'
+require 'uri'
 
 module KamalNapper
   # Command-line interface using Thor with proper error handling
@@ -263,9 +265,10 @@ module KamalNapper
       # Wait for health server to be completely ready
       health_server_ready = false
       retry_count = 0
+      daemon_port = ENV['DAEMON_PORT'] ? ENV['DAEMON_PORT'].to_i : 3000
       5.times do
         begin
-          uri = URI("http://localhost:#{port}/health")
+          uri = URI("http://localhost:#{daemon_port}/health")
           response = Net::HTTP.get_response(uri)
           if response.code.to_i == 200
             info "Health server is ready and serving requests"
