@@ -51,7 +51,98 @@ server.mount_proc("/api/apps") do |req, res|
   })
 end
 
-# API endpoint to manually wake up an app (POST)
+# API endpoint to control app state (POST)
+server.mount_proc("/api/control") do |req, res|
+  if req.request_method != 'POST'
+    res.status = 405
+    res['Content-Type'] = 'application/json'
+    res.body = JSON.generate({error: "Method not allowed. Use POST."})
+    next
+  end
+  
+  begin
+    # Parse hostname and action from request body or query params
+    hostname = nil
+    action = nil
+    
+    if req.content_length && req.content_length > 0
+      request_body = req.body
+      if request_body
+        begin
+          data = JSON.parse(request_body)
+          hostname = data['hostname']
+          action = data['action']
+        rescue JSON::ParserError
+          # Try form data
+          hostname = req.query['hostname']
+          action = req.query['action']
+        end
+      end
+    else
+      hostname = req.query['hostname']
+      action = req.query['action']
+    end
+    
+    unless hostname
+      res.status = 400
+      res['Content-Type'] = 'application/json'
+      res.body = JSON.generate({error: "Missing hostname parameter"})
+      next
+    end
+    
+    unless action && ['wake', 'sleep'].include?(action)
+      res.status = 400
+      res['Content-Type'] = 'application/json'
+      res.body = JSON.generate({error: "Missing or invalid action parameter. Use 'wake' or 'sleep'."})
+      next
+    end
+    
+    supervisor = get_supervisor
+    
+    if action == 'wake'
+      success = supervisor.wake_app(hostname)
+      message = success ? "Wake up initiated for #{hostname}" : "App #{hostname} is already active or not found"
+    else # action == 'sleep'
+      # Find the app state and stop it if it's active
+      status_info = supervisor.status
+      app_info = status_info[:apps][hostname]
+      
+      if app_info && [:running, :idle].include?(app_info[:current_state])
+        # Stop the app by calling the supervisor's internal method
+        begin
+          supervisor.send(:stop_app, hostname)
+          success = true
+          message = "Sleep initiated for #{hostname}"
+        rescue StandardError => e
+          success = false
+          message = "Failed to put #{hostname} to sleep: #{e.message}"
+        end
+      else
+        success = false
+        message = "App #{hostname} is not currently active or not found"
+      end
+    end
+    
+    res.status = success ? 200 : 400
+    res['Content-Type'] = 'application/json'
+    res.body = JSON.generate({
+      success: success,
+      hostname: hostname,
+      action: action,
+      message: message,
+      timestamp: Time.now.iso8601
+    })
+  rescue StandardError => e
+    res.status = 500
+    res['Content-Type'] = 'application/json'
+    res.body = JSON.generate({
+      error: "Internal server error: #{e.message}",
+      timestamp: Time.now.iso8601
+    })
+  end
+end
+
+# API endpoint to manually wake up an app (POST) - kept for backward compatibility
 server.mount_proc("/api/wake") do |req, res|
   if req.request_method != 'POST'
     res.status = 405
@@ -276,20 +367,20 @@ server.mount_proc("/") do |req, res|
               # Get combined app state
               app_state = get_app_state(hostname, app_info)
               
-              # Determine toggle state and action button
-              is_active = [:running, :idle, :starting].include?(app_info[:current_state]) || app_state[:state] == 'Waking Up'
-              can_wake = app_state[:state] == 'Stopped'
+              # Determine toggle state and enabled/disabled status
+              is_checked = [:running, :idle, :starting].include?(app_info[:current_state]) || app_state[:state] == 'Waking Up'
+              is_transitional = [:starting, :stopping].include?(app_info[:current_state]) || app_state[:state] == 'Waking Up'
+              safe_hostname = hostname.gsub('.', '-')
               
-              action_html = if can_wake
-                "<div class=\"toggle-container\">" +
-                "<button class=\"wake-button\" onclick=\"wakeApp('#{hostname}', this)\">Wake Up</button>" +
-                "<span class=\"action-feedback\" id=\"feedback-#{hostname.gsub('.', '-')}\"></span>" +
+              action_html = "<div class=\"toggle-container\">" +
+                "<label class=\"toggle-switch\">" +
+                "<input type=\"checkbox\" #{is_checked ? 'checked' : ''} #{is_transitional ? 'disabled' : ''} " +
+                "onchange=\"toggleApp('#{hostname}', this)\" id=\"toggle-#{safe_hostname}\">" +
+                "<span class=\"toggle-slider\"></span>" +
+                "</label>" +
+                "<span class=\"toggle-label\">#{is_checked ? 'On' : 'Off'}</span>" +
+                "<span class=\"action-feedback\" id=\"feedback-#{safe_hostname}\"></span>" +
                 "</div>"
-              else
-                "<div class=\"toggle-container\">" +
-                "<span class=\"toggle-label\">#{is_active ? 'Active' : 'N/A'}</span>" +
-                "</div>"
-              end
               
               "<tr>" +
               "<td>#{display_name}</td>" +
@@ -310,6 +401,73 @@ server.mount_proc("/") do |req, res|
       </div>
       
       <script>
+        async function toggleApp(hostname, toggleElement) {
+          const safeHostname = hostname.replace(/\\./g, '-');
+          const feedbackElement = document.getElementById('feedback-' + safeHostname);
+          const labelElement = toggleElement.closest('.toggle-container').querySelector('.toggle-label');
+          const originalChecked = !toggleElement.checked; // Store original state before change
+          
+          // Determine action based on toggle state
+          const action = toggleElement.checked ? 'wake' : 'sleep';
+          const actionText = action === 'wake' ? 'Waking up' : 'Putting to sleep';
+          
+          // Disable toggle and show loading state
+          toggleElement.disabled = true;
+          feedbackElement.textContent = actionText + '...';
+          feedbackElement.style.color = '#007bff';
+          labelElement.textContent = 'Processing...';
+          
+          try {
+            const response = await fetch('/api/control', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ 
+                hostname: hostname,
+                action: action
+              })
+            });
+            
+            const result = await response.json();
+            
+            if (response.ok && result.success) {
+              feedbackElement.textContent = result.message + ' Refreshing in 3s...';
+              feedbackElement.style.color = '#28a745';
+              labelElement.textContent = toggleElement.checked ? 'On' : 'Off';
+              
+              // Refresh the page after 3 seconds to show updated state
+              setTimeout(() => {
+                window.location.reload();
+              }, 3000);
+            } else {
+              feedbackElement.textContent = result.message || (action + ' failed');
+              feedbackElement.style.color = '#dc3545';
+              
+              // Revert toggle state and re-enable after error
+              setTimeout(() => {
+                toggleElement.checked = originalChecked;
+                toggleElement.disabled = false;
+                labelElement.textContent = originalChecked ? 'On' : 'Off';
+                feedbackElement.textContent = '';
+              }, 3000);
+            }
+          } catch (error) {
+            console.error('Toggle request failed:', error);
+            feedbackElement.textContent = 'Network error occurred';
+            feedbackElement.style.color = '#dc3545';
+            
+            // Revert toggle state and re-enable after error
+            setTimeout(() => {
+              toggleElement.checked = originalChecked;
+              toggleElement.disabled = false;
+              labelElement.textContent = originalChecked ? 'On' : 'Off';
+              feedbackElement.textContent = '';
+            }, 3000);
+          }
+        }
+        
+        // Legacy function for backward compatibility
         async function wakeApp(hostname, button) {
           const feedbackElement = document.getElementById('feedback-' + hostname.replace(/\\./g, '-'));
           const originalText = button.textContent;
