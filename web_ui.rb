@@ -367,10 +367,18 @@ server.mount_proc("/") do |req, res|
               # Get combined app state
               app_state = get_app_state(hostname, app_info)
               
-              # Determine toggle state and enabled/disabled status
-              is_checked = [:running, :idle, :starting].include?(app_info[:current_state]) || app_state[:state] == 'Waking Up'
-              is_transitional = [:starting, :stopping].include?(app_info[:current_state]) || app_state[:state] == 'Waking Up'
+              # Determine toggle state more comprehensively
+              # Check both the tracked state and the actual app state display
+              tracked_active = [:running, :idle, :starting].include?(app_info[:current_state])
+              display_active = ['Running', 'Idle', 'Starting', 'Waking Up'].include?(app_state[:state])
+              
+              is_checked = tracked_active || display_active
+              is_transitional = [:starting, :stopping].include?(app_info[:current_state]) || 
+                               ['Starting', 'Stopping', 'Waking Up'].include?(app_state[:state])
               safe_hostname = hostname.gsub('.', '-')
+              
+              # Debug info (can be removed later)
+              debug_info = "<!-- Debug: tracked=#{app_info[:current_state]}, display=#{app_state[:state]}, checked=#{is_checked} -->"
               
               action_html = "<div class=\"toggle-container\">" +
                 "<label class=\"toggle-switch\">" +
@@ -380,6 +388,7 @@ server.mount_proc("/") do |req, res|
                 "</label>" +
                 "<span class=\"toggle-label\">#{is_checked ? 'On' : 'Off'}</span>" +
                 "<span class=\"action-feedback\" id=\"feedback-#{safe_hostname}\"></span>" +
+                debug_info +
                 "</div>"
               
               "<tr>" +
