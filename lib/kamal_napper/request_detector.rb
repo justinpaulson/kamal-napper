@@ -110,6 +110,9 @@ module KamalNapper
             next unless log_entry['msg'] == 'Request'
             next unless log_entry['host'] == hostname
             
+            # Skip automated/system requests that shouldn't count as user activity
+            next if automated_request?(log_entry)
+            
             # Parse timestamp
             timestamp = Time.parse(log_entry['time'])
             
@@ -127,6 +130,58 @@ module KamalNapper
       end
       
       latest_time
+    end
+
+    def automated_request?(log_entry)
+      # Get request details
+      path = log_entry['path'] || log_entry['uri'] || '/'
+      user_agent = log_entry['user_agent'] || log_entry['user-agent'] || ''
+      method = log_entry['method'] || 'GET'
+      hostname = log_entry['host'] || ''
+      
+      # Filter out health check requests
+      if path.match?(%r{^/(health|status|ping|ready|alive)/?$})
+        @logger.debug("Filtering health check request: #{hostname} #{method} #{path}")
+        return true
+      end
+      
+      # Filter out Let's Encrypt ACME challenges
+      if path.start_with?('/.well-known/acme-challenge/')
+        @logger.debug("Filtering ACME challenge: #{hostname} #{path}")
+        return true
+      end
+      
+      # Filter out common bot/crawler user agents
+      bot_patterns = [
+        /bot/i, /crawler/i, /spider/i, /scraper/i,
+        /google/i, /bing/i, /yahoo/i, /baidu/i,
+        /uptimerobot/i, /pingdom/i, /monitor/i,
+        /check/i, /scan/i, /probe/i
+      ]
+      
+      bot_patterns.each do |pattern|
+        if user_agent.match?(pattern)
+          @logger.debug("Filtering bot request: #{hostname} #{method} #{path} UA: #{user_agent[0..50]}")
+          return true
+        end
+      end
+      
+      # Filter out HEAD requests (often automated)
+      if method == 'HEAD'
+        @logger.debug("Filtering HEAD request: #{hostname} #{path}")
+        return true
+      end
+      
+      # Filter out requests with no user agent (often automated)
+      if user_agent.empty?
+        @logger.debug("Filtering request with no user agent: #{hostname} #{method} #{path}")
+        return true
+      end
+      
+      # Log legitimate requests for debugging
+      @logger.debug("Allowing request: #{hostname} #{method} #{path} UA: #{user_agent[0..50]}")
+      
+      false
     end
 
     def parse_access_logs(hostname)
@@ -240,6 +295,10 @@ module KamalNapper
             begin
               log_entry = JSON.parse(line)
               next unless log_entry['msg'] == 'Request'
+              
+              # Skip automated requests for hostname discovery too
+              next if automated_request?(log_entry)
+              
               hostname = log_entry['host']
               hostnames << hostname if hostname
             rescue JSON::ParserError
