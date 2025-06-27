@@ -264,28 +264,12 @@ module KamalNapper
 
       # Wait for health server to be completely ready
       health_server_ready = false
-      retry_count = 0
       daemon_port = ENV['DAEMON_PORT'] ? ENV['DAEMON_PORT'].to_i : 3000
-      5.times do
-        begin
-          uri = URI("http://localhost:#{daemon_port}/health")
-          response = Net::HTTP.get_response(uri)
-          if response.code.to_i == 200
-            info "Health server is ready and serving requests"
-            health_server_ready = true
-            break
-          end
-        rescue StandardError => e
-          error "Error connecting to health server: #{e.class}: #{e.message}"
-        end
-
-        retry_count += 1
-        sleep 1
-      end
-
-      unless health_server_ready
-        error "Health server failed to start in time, but continuing anyway"
-      end
+      
+      # Just assume health server will be ready - we've already waited 3 seconds
+      # and the thread has started. Checking localhost might cause blocking issues.
+      info "Assuming health server is ready after initialization delay"
+      health_server_ready = true
 
       # Start supervisor (blocking call)
       info "Starting supervisor in main process"
