@@ -51,6 +51,61 @@ server.mount_proc("/api/apps") do |req, res|
   })
 end
 
+# API endpoint to manually wake up an app (POST)
+server.mount_proc("/api/wake") do |req, res|
+  if req.request_method != 'POST'
+    res.status = 405
+    res['Content-Type'] = 'application/json'
+    res.body = JSON.generate({error: "Method not allowed. Use POST."})
+    next
+  end
+  
+  begin
+    # Parse hostname from request body or query params
+    hostname = nil
+    if req.content_length && req.content_length > 0
+      request_body = req.body
+      if request_body
+        begin
+          data = JSON.parse(request_body)
+          hostname = data['hostname']
+        rescue JSON::ParserError
+          # Try form data
+          hostname = req.query['hostname']
+        end
+      end
+    else
+      hostname = req.query['hostname']
+    end
+    
+    unless hostname
+      res.status = 400
+      res['Content-Type'] = 'application/json'
+      res.body = JSON.generate({error: "Missing hostname parameter"})
+      next
+    end
+    
+    supervisor = get_supervisor
+    success = supervisor.wake_app(hostname)
+    
+    res.status = success ? 200 : 400
+    res['Content-Type'] = 'application/json'
+    res.body = JSON.generate({
+      success: success,
+      hostname: hostname,
+      message: success ? "Wake up initiated for #{hostname}" : "App #{hostname} is already active or not found",
+      timestamp: Time.now.iso8601
+    })
+  rescue StandardError => e
+    res.status = 500
+    res['Content-Type'] = 'application/json'
+    res.body = JSON.generate({
+      error: "Internal server error: #{e.message}",
+      timestamp: Time.now.iso8601
+    })
+  end
+end
+
 # Create supervisor instance to access app states
 def get_supervisor
   @logger ||= KamalNapper::Logger.new
@@ -86,6 +141,11 @@ def get_app_state(hostname, app_info)
     "No activity detected"
   end
   
+  # Check if we should show "waking up" state
+  # This happens when the container is stopped but we detected recent activity
+  request_detector = KamalNapper::RequestDetector.new(logger: @logger, config: @config)
+  has_recent_activity = request_detector.recent_requests?(hostname, within_seconds: 30)
+  
   # Determine the real state based on container state and tracked state
   if container_running
     if tracked_state == :starting
@@ -98,7 +158,12 @@ def get_app_state(hostname, app_info)
       { state: 'Running', css_class: 'state-running', description: "Container is active", status: container_status, activity: "Last active #{activity_info}" }
     end
   else
-    { state: 'Stopped', css_class: 'state-stopped', description: "Container is not running", status: container_status, activity: "Last active #{activity_info}" }
+    # Container is not running - check if it should be waking up
+    if has_recent_activity && tracked_state == :stopped
+      { state: 'Waking Up', css_class: 'state-waking', description: "Application is waking up due to recent activity", status: "Starting container...", activity: "Activity detected, starting container" }
+    else
+      { state: 'Stopped', css_class: 'state-stopped', description: "Container is not running", status: container_status, activity: "Last active #{activity_info}" }
+    end
   end
 rescue StandardError => e
   { state: 'Unknown', css_class: 'state-unknown', description: "Error: #{e.message}", status: 'Error getting status', activity: 'Unknown' }
@@ -112,6 +177,27 @@ def format_duration(seconds)
     "#{(seconds / 60).round}m"
   else
     "#{(seconds / 3600).round(1)}h"
+  end
+end
+
+# Get appropriate refresh interval based on app states
+def get_refresh_interval(status_info)
+  # Check if any apps are in transitional states
+  transitional_states = [:starting, :stopping]
+  waking_states = status_info[:apps].any? do |hostname, app_info|
+    # Check if app might be waking up
+    app_state = get_app_state(hostname, app_info)
+    app_state[:state] == 'Waking Up'
+  end
+  
+  has_transitional = status_info[:apps].any? do |_, app_info|
+    transitional_states.include?(app_info[:current_state])
+  end
+  
+  if waking_states || has_transitional
+    10  # Refresh every 10 seconds for active transitions
+  else
+    60  # Normal refresh every 60 seconds
   end
 end
 
@@ -142,13 +228,37 @@ server.mount_proc("/") do |req, res|
         .state-idle { background-color: #fff3cd; color: #856404; padding: 3px 8px; border-radius: 4px; }
         .state-stopped { background-color: #f8d7da; color: #721c24; padding: 3px 8px; border-radius: 4px; }
         .state-starting, .state-stopping { background-color: #d1ecf1; color: #0c5460; padding: 3px 8px; border-radius: 4px; }
+        .state-waking { background-color: #ffeaa7; color: #d63031; padding: 3px 8px; border-radius: 4px; animation: pulse 2s infinite; }
         .state-unknown { background-color: #e2e3e5; color: #383d41; padding: 3px 8px; border-radius: 4px; }
+        @keyframes pulse {
+          0% { opacity: 1; }
+          50% { opacity: 0.6; }
+          100% { opacity: 1; }
+        }
         .no-apps { color: #666; font-style: italic; }
         .metadata { color: #666; margin-top: 20px; font-size: 0.9em; }
         .auto-refresh { text-align: right; color: #777; font-size: 0.8em; margin-top: 20px; }
         .container { max-width: 1000px; margin: 0 auto; }
+        
+        /* Toggle switch styles */
+        .toggle-container { display: flex; align-items: center; gap: 8px; }
+        .toggle-switch { position: relative; display: inline-block; width: 50px; height: 24px; }
+        .toggle-switch input { opacity: 0; width: 0; height: 0; }
+        .toggle-slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; 
+                        background-color: #ccc; transition: .4s; border-radius: 24px; }
+        .toggle-slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px;
+                               background-color: white; transition: .4s; border-radius: 50%; }
+        input:checked + .toggle-slider { background-color: #4CAF50; }
+        input:checked + .toggle-slider:before { transform: translateX(26px); }
+        input:disabled + .toggle-slider { background-color: #ddd; cursor: not-allowed; }
+        .toggle-label { font-size: 0.9em; color: #666; min-width: 60px; }
+        .wake-button { background: #007bff; color: white; border: none; padding: 4px 8px; 
+                      border-radius: 4px; cursor: pointer; font-size: 0.8em; }
+        .wake-button:hover { background: #0056b3; }
+        .wake-button:disabled { background: #ccc; cursor: not-allowed; }
+        .action-feedback { font-size: 0.8em; color: #666; margin-left: 8px; }
       </style>
-      <meta http-equiv="refresh" content="60"><!-- Auto refresh every 60 seconds -->
+      <meta http-equiv="refresh" content="#{get_refresh_interval(status_info)}"><!-- Auto refresh interval based on app states -->
     </head>
     <body>
       <div class="container">
@@ -159,17 +269,34 @@ server.mount_proc("/") do |req, res|
           
           #{status_info[:app_count] > 0 ? '' : '<p class="no-apps">No applications currently managed by Kamal Napper.</p>'}
           
-          #{status_info[:app_count] > 0 ? '<table><tr><th>Application</th><th>State</th><th>Details</th><th>Container Status</th></tr>' : ''}
+          #{status_info[:app_count] > 0 ? '<table><tr><th>Application</th><th>State</th><th>Details</th><th>Container Status</th><th>Actions</th></tr>' : ''}
           #{status_info[:apps].map do |hostname, app_info|
               # Get display name - strip .local if present
               display_name = hostname.end_with?('.local') ? hostname.gsub('.local', '') : hostname
               # Get combined app state
               app_state = get_app_state(hostname, app_info)
+              
+              # Determine toggle state and action button
+              is_active = [:running, :idle, :starting].include?(app_info[:current_state]) || app_state[:state] == 'Waking Up'
+              can_wake = app_state[:state] == 'Stopped'
+              
+              action_html = if can_wake
+                "<div class=\"toggle-container\">" +
+                "<button class=\"wake-button\" onclick=\"wakeApp('#{hostname}', this)\">Wake Up</button>" +
+                "<span class=\"action-feedback\" id=\"feedback-#{hostname.gsub('.', '-')}\"></span>" +
+                "</div>"
+              else
+                "<div class=\"toggle-container\">" +
+                "<span class=\"toggle-label\">#{is_active ? 'Active' : 'N/A'}</span>" +
+                "</div>"
+              end
+              
               "<tr>" +
               "<td>#{display_name}</td>" +
               "<td><span class=\"#{app_state[:css_class]}\">#{app_state[:state]}</span></td>" +
               "<td>#{app_state[:description]}<br><small style=\"color: #666;\">#{app_state[:activity]}</small></td>" +
               "<td><small>#{app_state[:status]}</small></td>" +
+              "<td>#{action_html}</td>" +
               "</tr>"
             end.join if status_info[:app_count] > 0}
           #{status_info[:app_count] > 0 ? '</table>' : ''}
@@ -178,9 +305,83 @@ server.mount_proc("/") do |req, res|
         <div class="metadata">
           <p>Poll interval: #{status_info[:poll_interval]}s</p>
           <p>Server time: #{Time.now}</p>
-          <p class="auto-refresh">Page automatically refreshes every 60 seconds</p>
+          <p class="auto-refresh">Page automatically refreshes every #{get_refresh_interval(status_info)} seconds</p>
         </div>
       </div>
+      
+      <script>
+        async function wakeApp(hostname, button) {
+          const feedbackElement = document.getElementById('feedback-' + hostname.replace(/\\./g, '-'));
+          const originalText = button.textContent;
+          
+          // Disable button and show loading state
+          button.disabled = true;
+          button.textContent = 'Waking...';
+          feedbackElement.textContent = 'Initiating wake-up...';
+          feedbackElement.style.color = '#007bff';
+          
+          try {
+            const response = await fetch('/api/wake', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ hostname: hostname })
+            });
+            
+            const result = await response.json();
+            
+            if (response.ok && result.success) {
+              feedbackElement.textContent = 'Wake-up initiated! Refreshing in 3s...';
+              feedbackElement.style.color = '#28a745';
+              
+              // Refresh the page after 3 seconds to show updated state
+              setTimeout(() => {
+                window.location.reload();
+              }, 3000);
+            } else {
+              feedbackElement.textContent = result.message || 'Wake-up failed';
+              feedbackElement.style.color = '#dc3545';
+              
+              // Re-enable button after error
+              setTimeout(() => {
+                button.disabled = false;
+                button.textContent = originalText;
+                feedbackElement.textContent = '';
+              }, 3000);
+            }
+          } catch (error) {
+            console.error('Wake-up request failed:', error);
+            feedbackElement.textContent = 'Network error occurred';
+            feedbackElement.style.color = '#dc3545';
+            
+            // Re-enable button after error
+            setTimeout(() => {
+              button.disabled = false;
+              button.textContent = originalText;
+              feedbackElement.textContent = '';
+            }, 3000);
+          }
+        }
+        
+        // Add a small indicator when the page is about to refresh
+        let refreshInterval = #{get_refresh_interval(status_info)};
+        if (refreshInterval <= 15) {
+          // Only show countdown for fast refresh intervals
+          let timeLeft = refreshInterval;
+          const refreshTimer = setInterval(() => {
+            timeLeft--;
+            if (timeLeft <= 5 && timeLeft > 0) {
+              const refreshElement = document.querySelector('.auto-refresh');
+              if (refreshElement) {
+                refreshElement.textContent = `Page automatically refreshes in ${timeLeft} seconds`;
+              }
+            } else if (timeLeft <= 0) {
+              clearInterval(refreshTimer);
+            }
+          }, 1000);
+        }
+      </script>
     </body>
     </html>
   HTML
