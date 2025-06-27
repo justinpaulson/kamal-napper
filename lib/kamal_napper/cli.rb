@@ -247,12 +247,15 @@ module KamalNapper
       # No forking, start directly in the container for Kamal compatibility
       # Keep things simple with just one process
       
+      info "Setting up daemon logging"
       # Setup logging right away
       setup_daemon_logging
 
+      info "Writing PID file"
       # Write PID file with current process ID
       write_pidfile(Process.pid)
 
+      info "Starting health server thread"
       # Start health server in this process
       health_server_thread = Thread.new do
         start_health_server_internal
@@ -274,7 +277,9 @@ module KamalNapper
       # Start supervisor (blocking call)
       info "Starting supervisor in main process"
       supervisor = create_supervisor
+      info "Created supervisor, about to call supervisor.start"
       supervisor.start
+      info "Supervisor.start returned - this should not happen in normal operation"
     end
 
     def setup_daemon_logging
