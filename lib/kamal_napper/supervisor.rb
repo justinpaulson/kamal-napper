@@ -159,11 +159,34 @@ module KamalNapper
 
       @app_states.each do |hostname, app_state|
         begin
+          # Validate state sync periodically
+          validate_app_state_sync(hostname, app_state)
+          
           manage_app_lifecycle(hostname, app_state)
         rescue StandardError => e
           @logger.error("Error managing #{hostname}: #{e.message}")
           # Reset app state on persistent errors
           app_state.reset!
+        end
+      end
+    end
+
+    def validate_app_state_sync(hostname, app_state)
+      # Only validate every 5th cycle to avoid too much overhead
+      return if rand(5) != 0
+      
+      actual_healthy = @health_checker.healthy?(hostname)
+      expected_healthy = app_state.active?
+      
+      if actual_healthy != expected_healthy
+        @logger.warn("#{hostname}: State sync mismatch - internal: #{app_state.current_state}, actual: #{actual_healthy ? 'healthy' : 'unhealthy'}")
+        
+        if actual_healthy && !expected_healthy
+          @logger.info("#{hostname}: Container is running but state is #{app_state.current_state}, correcting to running")
+          app_state.force_transition_to(:running, reason: 'state_sync_correction')
+        elsif !actual_healthy && expected_healthy
+          @logger.info("#{hostname}: Container is stopped but state is #{app_state.current_state}, correcting to stopped")
+          app_state.force_transition_to(:stopped, reason: 'state_sync_correction')
         end
       end
     end
@@ -179,12 +202,25 @@ module KamalNapper
       all_hostnames = Set.new(detected_hostnames)
       discovered_apps.each_key { |hostname| all_hostnames.add(hostname) }
 
+      # Filter out invalid hostnames
+      valid_hostnames = all_hostnames.select { |hostname| valid_hostname?(hostname) }
+
       # Ensure app states exist for all discovered apps
-      all_hostnames.each do |hostname|
+      valid_hostnames.each do |hostname|
         ensure_app_state(hostname)
       end
 
       @logger.debug("Total apps being managed: #{@app_states.size}")
+    end
+
+    def valid_hostname?(hostname)
+      return false if hostname.nil? || hostname.empty?
+      return false if hostname.match?(/^\d+\.\d+\.\d+\.\d+/) # Skip IP addresses
+      return false if hostname == 'localhost'
+      return false if hostname.include?(':') # Skip hostname:port formats
+      
+      # Must contain at least one dot and be a reasonable length
+      hostname.include?('.') && hostname.length > 3 && hostname.length < 100
     end
 
     def manage_app_lifecycle(hostname, app_state)
@@ -317,9 +353,24 @@ module KamalNapper
       unless @app_states.key?(hostname)
         @app_states[hostname] = AppState.new(hostname, logger: @logger, config: @config)
         @logger.debug("Created new app state for: #{hostname}")
+        
+        # Initialize state based on actual container status
+        initialize_app_state(hostname)
       end
 
       @app_states[hostname]
+    end
+
+    def initialize_app_state(hostname)
+      app_state = @app_states[hostname]
+      
+      # Check if container is actually running
+      if @health_checker.healthy?(hostname)
+        @logger.info("#{hostname}: Container is running, initializing to running state")
+        app_state.force_transition_to(:running, reason: 'initial_state_sync')
+      else
+        @logger.info("#{hostname}: Container is not healthy, keeping in stopped state")
+      end
     end
 
     def load_persisted_states
