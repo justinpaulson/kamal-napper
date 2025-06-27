@@ -258,8 +258,13 @@ module KamalNapper
       app_state.transition_to(:starting)
 
       begin
-        @runner.start
-        @logger.info("#{hostname}: Start command executed successfully")
+        success = @runner.start_app_container(hostname)
+        if success
+          @logger.info("#{hostname}: Start command executed successfully")
+        else
+          @logger.error("#{hostname}: Failed to start container")
+          app_state.force_transition_to(:stopped, reason: 'start_failed')
+        end
       rescue Runner::CommandError => e
         @logger.error("#{hostname}: Failed to start: #{e.message}")
         app_state.force_transition_to(:stopped, reason: 'start_failed')
@@ -273,8 +278,14 @@ module KamalNapper
       app_state.transition_to(:stopping)
 
       begin
-        @runner.stop
-        @logger.info("#{hostname}: Stop command executed successfully")
+        success = @runner.stop_app_container(hostname)
+        if success
+          @logger.info("#{hostname}: Stop command executed successfully")
+        else
+          @logger.error("#{hostname}: Failed to stop container")
+          force_stop_app(hostname)
+          app_state.force_transition_to(:stopped, reason: 'stop_failed')
+        end
       rescue Runner::CommandError => e
         @logger.error("#{hostname}: Failed to stop gracefully: #{e.message}")
         force_stop_app(hostname)
@@ -286,11 +297,17 @@ module KamalNapper
       @logger.warn("#{hostname}: Force stopping app")
 
       begin
-        # Try maintenance mode to stop traffic
-        @runner.maintenance(enable: true)
-        sleep(2)
-        @runner.stop
-        @runner.maintenance(enable: false)
+        # Force stop the container directly
+        service_name = hostname.split('.').first
+        result = `docker ps --filter 'label=service=#{service_name}' --format '{{.Names}}'`.strip
+        
+        if !result.empty?
+          container_name = result.lines.first&.strip
+          if container_name
+            @logger.info("#{hostname}: Force killing container #{container_name}")
+            `docker kill #{container_name}`
+          end
+        end
       rescue StandardError => e
         @logger.error("#{hostname}: Force stop failed: #{e.message}")
       end

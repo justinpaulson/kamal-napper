@@ -26,6 +26,54 @@ module KamalNapper
       execute_with_retry('kamal app stop')
     end
 
+    # Stop a specific application container by hostname
+    def stop_app_container(hostname)
+      @logger.info("Stopping container for #{hostname}")
+      
+      # Find the container name for this hostname
+      service_name = hostname.split('.').first
+      
+      # Try to find and stop the container
+      result = execute_command("docker ps --filter 'label=service=#{service_name}' --format '{{.Names}}'", capture_output: true)
+      
+      if result[:success] && !result[:output].empty?
+        container_name = result[:output].strip.lines.first&.strip
+        if container_name
+          @logger.info("Found container #{container_name} for #{hostname}, stopping it")
+          execute_with_retry("docker stop #{container_name}")
+          return true
+        end
+      end
+      
+      @logger.warn("No container found for #{hostname} (service: #{service_name})")
+      false
+    end
+
+    # Start a specific application container by hostname  
+    def start_app_container(hostname)
+      @logger.info("Starting container for #{hostname}")
+      
+      # Find the stopped container name for this hostname
+      service_name = hostname.split('.').first
+      
+      # Try to find and start the container
+      result = execute_command("docker ps -a --filter 'label=service=#{service_name}' --format '{{.Names}}\t{{.Status}}'", capture_output: true)
+      
+      if result[:success] && !result[:output].empty?
+        result[:output].lines.each do |line|
+          name, status = line.strip.split("\t", 2)
+          if status&.include?('Exited') || status&.include?('Created')
+            @logger.info("Found stopped container #{name} for #{hostname}, starting it")
+            execute_with_retry("docker start #{name}")
+            return true
+          end
+        end
+      end
+      
+      @logger.warn("No stopped container found for #{hostname} (service: #{service_name})")
+      false
+    end
+
     # Enable maintenance mode
     def maintenance(enable: true)
       action = enable ? 'up' : 'down'
