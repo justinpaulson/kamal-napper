@@ -12,7 +12,7 @@ servers:
 # Use kamal-proxy instead of Traefik
 proxy:
   ssl: true
-  host: kamal-napper.justinpaulson.com
+  host: naptime.justinpaulson.com
 
 # Default configuration, no custom health check settings needed
 

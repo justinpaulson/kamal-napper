@@ -219,8 +219,23 @@ module KamalNapper
       return false if hostname == 'localhost'
       return false if hostname.include?(':') # Skip hostname:port formats
       
+      # Skip kamal-napper itself to prevent self-monitoring
+      if self_hostname?(hostname)
+        @logger.debug("Skipping self-hostname: #{hostname}")
+        return false
+      end
+      
       # Must contain at least one dot and be a reasonable length
       hostname.include?('.') && hostname.length > 3 && hostname.length < 100
+    end
+
+    def self_hostname?(hostname)
+      # Check configured hostname from deploy.yml
+      configured_hostname = @config.own_hostname
+      return true if configured_hostname && hostname == configured_hostname
+      
+      # Fallback to pattern matching for backwards compatibility
+      hostname.include?('kamal-napper') || hostname.include?('naptime')
     end
 
     def manage_app_lifecycle(hostname, app_state)
@@ -247,8 +262,22 @@ module KamalNapper
     def handle_starting_app(hostname, app_state)
       if app_state.startup_timed_out?
         @logger.warn("#{hostname}: Startup timed out, resetting to stopped")
+        # Disable maintenance mode on timeout
+        begin
+          @runner.maintenance(enable: false)
+          @logger.info("#{hostname}: Disabled maintenance mode after startup timeout")
+        rescue StandardError => e
+          @logger.warn("#{hostname}: Failed to disable maintenance mode after timeout: #{e.message}")
+        end
         app_state.force_transition_to(:stopped, reason: 'startup_timeout')
       elsif @health_checker.healthy?(hostname)
+        # Container is healthy, disable maintenance mode and transition to running
+        begin
+          @runner.maintenance(enable: false)
+          @logger.info("#{hostname}: Disabled maintenance mode, app is now healthy")
+        rescue StandardError => e
+          @logger.warn("#{hostname}: Failed to disable maintenance mode: #{e.message}")
+        end
         app_state.transition_to(:running)
       end
     end
@@ -293,16 +322,36 @@ module KamalNapper
       @logger.info("#{hostname}: Starting app")
       app_state.transition_to(:starting)
 
+      # Enable maintenance mode to show spinner page instead of 502 errors
+      begin
+        @runner.maintenance(enable: true)
+        @logger.info("#{hostname}: Enabled maintenance mode during startup")
+      rescue StandardError => e
+        @logger.warn("#{hostname}: Failed to enable maintenance mode: #{e.message}")
+      end
+
       begin
         success = @runner.start_app_container(hostname)
         if success
           @logger.info("#{hostname}: Start command executed successfully")
         else
           @logger.error("#{hostname}: Failed to start container")
+          # Disable maintenance mode on failure
+          begin
+            @runner.maintenance(enable: false)
+          rescue StandardError => e
+            @logger.warn("#{hostname}: Failed to disable maintenance mode after start failure: #{e.message}")
+          end
           app_state.force_transition_to(:stopped, reason: 'start_failed')
         end
       rescue Runner::CommandError => e
         @logger.error("#{hostname}: Failed to start: #{e.message}")
+        # Disable maintenance mode on failure
+        begin
+          @runner.maintenance(enable: false)
+        rescue StandardError => e
+          @logger.warn("#{hostname}: Failed to disable maintenance mode after start failure: #{e.message}")
+        end
         app_state.force_transition_to(:stopped, reason: 'start_failed')
       end
     end

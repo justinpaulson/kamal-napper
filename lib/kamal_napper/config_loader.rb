@@ -34,6 +34,11 @@ module KamalNapper
       ENV[env_var] || get(key)
     end
 
+    # Get the configured hostname from deploy.yml
+    def own_hostname
+      @own_hostname ||= load_own_hostname
+    end
+
     # Get all configuration as a hash
     def to_h
       @config.dup
@@ -115,6 +120,24 @@ module KamalNapper
 
       unless errors.empty?
         raise ConfigError, "Configuration validation errors: #{errors.join(', ')}"
+      end
+    end
+
+    def load_own_hostname
+      deploy_config_path = File.join(KamalNapper.root, 'config', 'deploy.yml')
+      
+      return nil unless File.exist?(deploy_config_path)
+      
+      begin
+        file_content = File.read(deploy_config_path)
+        erb_content = ERB.new(file_content).result
+        deploy_config = YAML.safe_load(erb_content) || {}
+        
+        # Extract hostname from proxy.host configuration
+        deploy_config.dig('proxy', 'host')
+      rescue StandardError => e
+        # Log warning but don't fail - fallback to hardcoded exclusion
+        nil
       end
     end
   end
