@@ -234,8 +234,13 @@ module KamalNapper
       configured_hostname = @config.own_hostname
       return true if configured_hostname && hostname == configured_hostname
       
-      # Fallback to pattern matching for backwards compatibility
-      hostname.include?('kamal-napper') || hostname.include?('naptime')
+      # Fallback to pattern matching for backwards compatibility and old hostname cleanup
+      return true if hostname.include?('kamal-napper') || hostname.include?('naptime')
+      
+      # Explicitly exclude known old hostnames that should no longer be monitored
+      return true if hostname == 'kamal-napper.justinpaulson.com'
+      
+      false
     end
 
     def manage_app_lifecycle(hostname, app_state)
