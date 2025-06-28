@@ -141,8 +141,11 @@ module KamalNapper
             if label_hash['service'] && label_hash['role'] != 'kamal-proxy'
               service_name = label_hash['service']
 
-              # Try to determine hostname from traefik labels or service name
-              hostname = extract_hostname_from_labels(label_hash) || "#{service_name}.justinpaulson.com"
+              # Try to determine hostname from traefik labels only
+              hostname = extract_hostname_from_labels(label_hash)
+              
+              # Skip if no hostname can be determined from labels
+              next unless hostname
 
               apps[hostname] = {
                 service: service_name,
