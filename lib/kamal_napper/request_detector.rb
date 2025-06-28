@@ -62,7 +62,18 @@ module KamalNapper
       # Get hostnames from memory
       hostnames.merge(@last_request_times.keys)
 
-      hostnames.to_a
+      # Filter out kamal-napper self-hostnames at the source
+      filtered_hostnames = hostnames.reject do |hostname|
+        is_self_hostname = hostname&.include?('kamal-napper') || 
+                          hostname&.include?('naptime') ||
+                          hostname == 'kamal-napper.justinpaulson.com'
+        if is_self_hostname
+          @logger.debug("RequestDetector: Filtering out self-hostname: #{hostname}")
+        end
+        is_self_hostname
+      end
+
+      filtered_hostnames.to_a
     end
 
     # Get request statistics for a hostname
